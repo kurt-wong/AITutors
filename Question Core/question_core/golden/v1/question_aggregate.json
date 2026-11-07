@@ -1,0 +1,95 @@
+{
+  "identity": {
+    "created_at": "2026-01-01T00:00:00Z",
+    "embedding_ref": null,
+    "identity_fingerprint": "fp-numeric-c-naoh",
+    "question_id": "00000000-0000-4000-8000-000000000005"
+  },
+  "instances": [
+    {
+      "created_at": "2026-01-01T00:00:00Z",
+      "instance_id": "00000000-0000-4000-8000-000000000007",
+      "line_end": 15,
+      "line_start": 13,
+      "note": null,
+      "ordinal": 1,
+      "printed_number": "1",
+      "question_id": "00000000-0000-4000-8000-000000000005",
+      "question_numbers": [
+        1
+      ],
+      "revision_id": "00000000-0000-4000-8000-000000000006",
+      "section": null,
+      "source_document_id": "chem_2020_js"
+    }
+  ],
+  "revisions": [
+    {
+      "answer_visibility": "review_only",
+      "answers": [
+        {
+          "accepted_alternatives": [],
+          "answer_display": null,
+          "answer_type": "numeric",
+          "answer_value": "0.10",
+          "completeness": "unknown",
+          "evidence_kind": "absent",
+          "grading_rule": "numeric_tolerance",
+          "note": null,
+          "tolerance": 0.005,
+          "unit": "mol/L",
+          "visibility": "review_only"
+        }
+      ],
+      "change_note": null,
+      "content": {
+        "assets": [],
+        "bodies": [
+          {
+            "local_id": "q",
+            "material_ids": [],
+            "note": null,
+            "options": [],
+            "parent_question_ref": null,
+            "printed_number": null,
+            "question_type": "numeric",
+            "stem_blocks": [
+              {
+                "kind": "text",
+                "line_end": null,
+                "line_start": null,
+                "text": "计算 c(NaOH)"
+              }
+            ],
+            "sub_question_ids": [],
+            "unit_type": "standalone_question"
+          }
+        ],
+        "materials": []
+      },
+      "content_hash": "009bb6b3932c8d180aa31e0d06474b79876e528f57cda4b0b7172c782960d12d",
+      "created_at": "2026-01-01T00:00:00Z",
+      "created_by": null,
+      "evidence": {
+        "conflicts": [],
+        "records": []
+      },
+      "explanation_blocks": [],
+      "explanation_visibility": "review_only",
+      "question_id": "00000000-0000-4000-8000-000000000005",
+      "question_type": "numeric",
+      "revision_id": "00000000-0000-4000-8000-000000000006",
+      "revision_number": 1,
+      "state": {
+        "approval": null,
+        "completeness": "incomplete",
+        "content_hash": "009bb6b3932c8d180aa31e0d06474b79876e528f57cda4b0b7172c782960d12d",
+        "publication": "unpublished",
+        "publication_record": null,
+        "review": "not_ready",
+        "revision_id": "00000000-0000-4000-8000-000000000006"
+      }
+    }
+  ],
+  "state_history": []
+}

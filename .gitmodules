@@ -1,0 +1,6 @@
+[submodule "DeepTutor"]
+	path = DeepTutor
+	url = https://github.com/kurt-wong/DeepTutor.git
+[submodule "Preprocessing"]
+	path = Preprocessing
+	url = https://github.com/kurt-wong/Aitutors-preprocessing.git

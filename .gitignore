@@ -1,0 +1,58 @@
+# =============================================================
+# AITutors Root Repository — Git Ignore Rules
+# =============================================================
+# Submodule contents are managed by their own repositories.
+# This file only governs the root repository's direct files.
+# =============================================================
+
+# --- Entirely excluded projects ---
+ARCHIVE/
+_dsh_review/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+pytest-of-*/
+
+# --- Test artifacts ---
+results_*.xml
+_fix_test.py
+
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# --- Runtime artifacts ---
+*.lock
+*.tmp
+*.log
+*.bak
+*.orig
+
+# --- Secrets / Credentials ---
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json

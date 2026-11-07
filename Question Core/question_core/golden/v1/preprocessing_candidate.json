@@ -1,0 +1,208 @@
+{
+  "core": {
+    "answer_visibility": "review_only",
+    "answers": [
+      {
+        "accepted_alternatives": [],
+        "answer_display": "B",
+        "answer_type": "single_choice",
+        "answer_value": "B",
+        "completeness": "full",
+        "evidence_kind": "answer_lines",
+        "grading_rule": "exact",
+        "note": null,
+        "visibility": "review_only"
+      }
+    ],
+    "candidate_id": "00000000-0000-4000-8000-000000000001",
+    "completeness": "complete",
+    "content": {
+      "assets": [
+        {
+          "asset_id": "img_203_1131",
+          "asset_role": "figure",
+          "bbox": null,
+          "content_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "height": null,
+          "mime_type": "image/jpeg",
+          "note": null,
+          "page": 1,
+          "source_id": "paper.manifest.json",
+          "storage_path": "_imgs/img_in_image_box_203_1131_342_1327.jpg",
+          "target_path": "/bodies/0/stem_blocks/0",
+          "width": null
+        }
+      ],
+      "bodies": [
+        {
+          "local_id": "q1",
+          "material_ids": [],
+          "note": null,
+          "options": [
+            {
+              "blocks": [
+                {
+                  "kind": "text",
+                  "line_end": null,
+                  "line_start": null,
+                  "text": "选项甲"
+                }
+              ],
+              "label": "A",
+              "line_end": 15,
+              "line_start": 15
+            },
+            {
+              "blocks": [
+                {
+                  "kind": "text",
+                  "line_end": null,
+                  "line_start": null,
+                  "text": "选项乙"
+                }
+              ],
+              "label": "B",
+              "line_end": 15,
+              "line_start": 15
+            }
+          ],
+          "parent_question_ref": null,
+          "printed_number": "1",
+          "question_type": "single_choice",
+          "stem_blocks": [
+            {
+              "kind": "text",
+              "line_end": 13,
+              "line_start": 13,
+              "text": "下列说法正确的是"
+            }
+          ],
+          "sub_question_ids": [],
+          "unit_type": "standalone_question"
+        }
+      ],
+      "materials": []
+    },
+    "content_visibility": "review_only",
+    "created_at": "2026-01-01T00:00:00Z",
+    "created_by": null,
+    "evidence": {
+      "conflicts": [],
+      "records": [
+        {
+          "collected_at": "2026-01-01T00:00:00Z",
+          "collected_by": null,
+          "evidence_id": "00000000-0000-4000-8000-000000000002",
+          "evidence_role": "answer",
+          "evidence_status": "active",
+          "locators": [
+            {
+              "bbox": null,
+              "kind": "line_range",
+              "line_end": 388,
+              "line_start": 388,
+              "note": null,
+              "page": null,
+              "pointer": null
+            }
+          ],
+          "normalized_value": null,
+          "note": null,
+          "raw_value": "B",
+          "source": {
+            "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "locator_uri": null,
+            "source_id": "paper.md",
+            "source_kind": "source_markdown"
+          },
+          "target_path": "/answers/0/answer_value",
+          "visibility": "review_only"
+        }
+      ]
+    },
+    "evidence_visibility": "review_only",
+    "explanation_visibility": "review_only",
+    "identity_fingerprint": "fp-chem-2020-js-q1",
+    "ingestion": {
+      "adapter_version": "strict-adapter/0.1.0",
+      "candidate_idempotency_key": "qk1_02c2774ddf22e409ba98299549320e2df809e22d",
+      "ingested_at": "2026-01-01T00:00:00Z",
+      "ingested_by": null,
+      "ingestion_run_id": "00000000-0000-4000-8000-000000000003",
+      "input_hashes": {
+        "manifest_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_md_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "source_pdf_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "upload_blob_hash": null
+      },
+      "note": null
+    },
+    "note": null,
+    "question_type": "single_choice"
+  },
+  "source": {
+    "annotated_md_ref": null,
+    "answer_declaration": {
+      "attribution": "declared",
+      "completeness": "complete",
+      "declared_value": "B",
+      "evidence_kind": "answer_lines",
+      "table_row_locator": null
+    },
+    "distribution_policy": "unknown",
+    "grade": "高三",
+    "manifest_ref": {
+      "byte_size": null,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "doc_role": "manifest",
+      "locator_uri": "package/paper.manifest.json"
+    },
+    "owner_scope": "public_bank",
+    "pii_status": "none",
+    "source_document_id": "chem_2020_js/Q1",
+    "source_md_ref": {
+      "byte_size": null,
+      "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "doc_role": "source_markdown",
+      "locator_uri": "package/paper.md"
+    },
+    "source_pdf_ref": {
+      "byte_size": null,
+      "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "doc_role": "source_pdf",
+      "locator_uri": "package/paper.pdf"
+    },
+    "source_type": "preprocessing",
+    "subject": "化学",
+    "unit": {
+      "answer_lines": [
+        388,
+        388
+      ],
+      "explanation_lines": [
+        390,
+        398
+      ],
+      "extra_lines": null,
+      "material_lines": null,
+      "options_lines": [
+        15,
+        15
+      ],
+      "original_question_type": "single_choice",
+      "printed_number": "1",
+      "question_numbers": [
+        1
+      ],
+      "questions_lines": null,
+      "section": "单项选择题",
+      "stem_lines": [
+        13,
+        13
+      ],
+      "unit_id": "Q1",
+      "unit_type": "standalone_question"
+    }
+  },
+  "source_type": "preprocessing"
+}

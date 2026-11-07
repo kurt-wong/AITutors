@@ -1,0 +1,3717 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aitutor.example/schemas/question-core/contracts/v1",
+  "title": "AITutor Question Core contract v1.0.0",
+  "x-contract-version": "1.0.0",
+  "properties": {
+    "PreprocessingCandidate": {
+      "additionalProperties": false,
+      "description": "Candidate produced from a reviewed Preprocessing package.",
+      "properties": {
+        "source_type": {
+          "const": "preprocessing",
+          "default": "preprocessing",
+          "title": "Source Type",
+          "type": "string"
+        },
+        "core": {
+          "$ref": "#/$defs/CandidateCore"
+        },
+        "source": {
+          "$ref": "#/$defs/PreprocessingSource"
+        }
+      },
+      "required": [
+        "core",
+        "source"
+      ],
+      "title": "PreprocessingCandidate",
+      "type": "object"
+    },
+    "StudentUploadCandidate": {
+      "additionalProperties": false,
+      "description": "Candidate produced from a student's own upload.",
+      "properties": {
+        "source_type": {
+          "const": "student_upload",
+          "default": "student_upload",
+          "title": "Source Type",
+          "type": "string"
+        },
+        "core": {
+          "$ref": "#/$defs/CandidateCore"
+        },
+        "source": {
+          "$ref": "#/$defs/StudentUploadSource"
+        }
+      },
+      "required": [
+        "core",
+        "source"
+      ],
+      "title": "StudentUploadCandidate",
+      "type": "object"
+    },
+    "QuestionAggregate": {
+      "additionalProperties": false,
+      "description": "The full record of one logical question.\n\n``revisions`` is append-only. ``instances`` lists every known\noccurrence. ``state_history`` preserves every approval/publication event\nso rule 9 (history preserved) is structural, not a convention.",
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/QuestionIdentity"
+        },
+        "revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "minItems": 1,
+          "title": "Revisions",
+          "type": "array"
+        },
+        "instances": {
+          "items": {
+            "$ref": "#/$defs/QuestionInstance"
+          },
+          "title": "Instances",
+          "type": "array"
+        },
+        "state_history": {
+          "items": {
+            "$ref": "#/$defs/StateSnapshot"
+          },
+          "title": "State History",
+          "type": "array"
+        }
+      },
+      "required": [
+        "identity",
+        "revisions"
+      ],
+      "title": "QuestionAggregate",
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "AnswerCompleteness": {
+      "enum": [
+        "full",
+        "partial",
+        "unknown",
+        "absent"
+      ],
+      "title": "AnswerCompleteness",
+      "type": "string"
+    },
+    "AnswerEvidenceKind": {
+      "description": "How the answer evidence was declared upstream.\n\nMirrors the real Preprocessing ``answer_evidence.type`` values so a\nStrict Adapter can map without re-interpreting semantics. The three\ncases in the Strict boundary table are:\n\n* ``ANSWER_LINES``        — declared, direct map.\n* ``ANSWER_TABLE_ROW``    — structured answer table with explicit\n                             question-number → answer mapping; allowed\n                             deterministic conversion, row evidence kept.\n* ``INLINE_IN_EXPLANATION`` / ``RANGE_STRING`` / ``ABSENT`` — no\n                             reliable per-question attribution outside\n                             the declared lines; anything the adapter\n                             cannot attribute becomes ``incomplete``.",
+      "enum": [
+        "answer_lines",
+        "answer_table_row",
+        "inline_in_explanation",
+        "range_string",
+        "absent"
+      ],
+      "title": "AnswerEvidenceKind",
+      "type": "string"
+    },
+    "Asset": {
+      "additionalProperties": false,
+      "description": "An image, chart, formula-render or other binary/content artifact.\n\n``target_path`` links the asset to the field it illustrates; several\nassets may share a target (multi-figure material) and one asset may be\nreferenced from several targets (shared material).",
+      "properties": {
+        "asset_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "asset_role": {
+          "default": "figure",
+          "enum": [
+            "figure",
+            "chart",
+            "photo",
+            "diagram",
+            "formula_render",
+            "table_render",
+            "other"
+          ],
+          "title": "Asset Role",
+          "type": "string"
+        },
+        "target_path": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^(/([^/~]|~[01])*)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Path"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Id"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BBox"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "storage_path": {
+          "maxLength": 1000,
+          "title": "Storage Path",
+          "type": "string"
+        },
+        "content_hash": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Hash"
+        },
+        "mime_type": {
+          "default": "image/png",
+          "maxLength": 100,
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "asset_id",
+        "storage_path"
+      ],
+      "title": "Asset",
+      "type": "object"
+    },
+    "BBox": {
+      "additionalProperties": false,
+      "description": "Axis-aligned region in a page's coordinate space.",
+      "properties": {
+        "x0": {
+          "title": "X0",
+          "type": "number"
+        },
+        "y0": {
+          "title": "Y0",
+          "type": "number"
+        },
+        "x1": {
+          "title": "X1",
+          "type": "number"
+        },
+        "y1": {
+          "title": "Y1",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x0",
+        "y0",
+        "x1",
+        "y1"
+      ],
+      "title": "BBox",
+      "type": "object"
+    },
+    "CandidateCore": {
+      "additionalProperties": false,
+      "description": "Everything a candidate carries regardless of source.\n\nPermission / ownership facts (``owner_scope``, ``pii_status``,\n``distribution_policy``) deliberately live on the **source branch**,\nnot here: each source owns its own permission truth, and duplicating it\nhere created the F3 contradiction class. Visibility of individual\nfields (answer / explanation / evidence) stays here because it is\nper-field policy, not source-level ownership.",
+      "properties": {
+        "candidate_id": {
+          "format": "uuid",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "question_type": {
+          "$ref": "#/$defs/QuestionType"
+        },
+        "content": {
+          "$ref": "#/$defs/QuestionContent"
+        },
+        "answers": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chemical": "#/$defs/ChemicalAnswer",
+                "composite": "#/$defs/CompositeAnswer",
+                "composite_sub": "#/$defs/CompositeSubAnswer",
+                "expression": "#/$defs/ExpressionAnswer",
+                "fill_blank": "#/$defs/FillBlankAnswer",
+                "multi_choice": "#/$defs/MultiChoiceAnswer",
+                "multi_step": "#/$defs/MultiStepAnswer",
+                "numeric": "#/$defs/NumericAnswer",
+                "single_choice": "#/$defs/SingleChoiceAnswer"
+              },
+              "propertyName": "answer_type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/SingleChoiceAnswer"
+              },
+              {
+                "$ref": "#/$defs/MultiChoiceAnswer"
+              },
+              {
+                "$ref": "#/$defs/FillBlankAnswer"
+              },
+              {
+                "$ref": "#/$defs/NumericAnswer"
+              },
+              {
+                "$ref": "#/$defs/ExpressionAnswer"
+              },
+              {
+                "$ref": "#/$defs/ChemicalAnswer"
+              },
+              {
+                "$ref": "#/$defs/MultiStepAnswer"
+              },
+              {
+                "$ref": "#/$defs/CompositeAnswer"
+              },
+              {
+                "$ref": "#/$defs/CompositeSubAnswer"
+              }
+            ]
+          },
+          "title": "Answers",
+          "type": "array"
+        },
+        "evidence": {
+          "$ref": "#/$defs/EvidenceBundle"
+        },
+        "completeness": {
+          "$ref": "#/$defs/Completeness",
+          "default": "incomplete"
+        },
+        "identity_fingerprint": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Identity Fingerprint"
+        },
+        "ingestion": {
+          "$ref": "#/$defs/IngestionIdentity"
+        },
+        "content_visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "answer_visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "explanation_visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "evidence_visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created By"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "question_type",
+        "content",
+        "ingestion"
+      ],
+      "title": "CandidateCore",
+      "type": "object"
+    },
+    "ChemicalAnswer": {
+      "additionalProperties": false,
+      "description": "Chemical formula or equation, e.g. ``VO2+`` or ``Fe-2e-=Fe2+``.",
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "default": "exact",
+          "enum": [
+            "exact",
+            "normalized",
+            "numeric_tolerance",
+            "set",
+            "manual"
+          ],
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "chemical",
+          "default": "chemical",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "answer_value": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Answer Value",
+          "type": "string"
+        },
+        "notation": {
+          "default": "plain",
+          "enum": [
+            "plain",
+            "latex"
+          ],
+          "title": "Notation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "answer_value"
+      ],
+      "title": "ChemicalAnswer",
+      "type": "object"
+    },
+    "ChemicalBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "chemical",
+          "default": "chemical",
+          "title": "Kind",
+          "type": "string"
+        },
+        "formula": {
+          "minLength": 1,
+          "title": "Formula",
+          "type": "string"
+        },
+        "notation": {
+          "default": "plain",
+          "enum": [
+            "plain",
+            "latex"
+          ],
+          "title": "Notation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "formula"
+      ],
+      "title": "ChemicalBlock",
+      "type": "object"
+    },
+    "Completeness": {
+      "enum": [
+        "complete",
+        "incomplete"
+      ],
+      "title": "Completeness",
+      "type": "string"
+    },
+    "CompositeAnswer": {
+      "additionalProperties": false,
+      "description": "Answers of a composite question, keyed by sub-question label.\n\nParent-level answers must not be flattened into one string: each\nsub-question keeps its own typed answer and its own evidence.",
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "default": "exact",
+          "enum": [
+            "exact",
+            "normalized",
+            "numeric_tolerance",
+            "set",
+            "manual"
+          ],
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "composite",
+          "default": "composite",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "answer_value": {
+          "items": {
+            "$ref": "#/$defs/CompositeSubAnswer"
+          },
+          "minItems": 1,
+          "title": "Answer Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "answer_value"
+      ],
+      "title": "CompositeAnswer",
+      "type": "object"
+    },
+    "CompositeSubAnswer": {
+      "additionalProperties": false,
+      "description": "Answer belonging to one sub-question of a composite parent.",
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "default": "exact",
+          "enum": [
+            "exact",
+            "normalized",
+            "numeric_tolerance",
+            "set",
+            "manual"
+          ],
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "composite_sub",
+          "default": "composite_sub",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "sub_label": {
+          "maxLength": 20,
+          "minLength": 1,
+          "title": "Sub Label",
+          "type": "string"
+        },
+        "answer_value": {
+          "discriminator": {
+            "mapping": {
+              "chemical": "#/$defs/ChemicalAnswer",
+              "composite": "#/$defs/CompositeAnswer",
+              "composite_sub": "#/$defs/CompositeSubAnswer",
+              "expression": "#/$defs/ExpressionAnswer",
+              "fill_blank": "#/$defs/FillBlankAnswer",
+              "multi_choice": "#/$defs/MultiChoiceAnswer",
+              "multi_step": "#/$defs/MultiStepAnswer",
+              "numeric": "#/$defs/NumericAnswer",
+              "single_choice": "#/$defs/SingleChoiceAnswer"
+            },
+            "propertyName": "answer_type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SingleChoiceAnswer"
+            },
+            {
+              "$ref": "#/$defs/MultiChoiceAnswer"
+            },
+            {
+              "$ref": "#/$defs/FillBlankAnswer"
+            },
+            {
+              "$ref": "#/$defs/NumericAnswer"
+            },
+            {
+              "$ref": "#/$defs/ExpressionAnswer"
+            },
+            {
+              "$ref": "#/$defs/ChemicalAnswer"
+            },
+            {
+              "$ref": "#/$defs/MultiStepAnswer"
+            },
+            {
+              "$ref": "#/$defs/CompositeAnswer"
+            },
+            {
+              "$ref": "#/$defs/CompositeSubAnswer"
+            }
+          ],
+          "title": "Answer Value"
+        }
+      },
+      "required": [
+        "sub_label",
+        "answer_value"
+      ],
+      "title": "CompositeSubAnswer",
+      "type": "object"
+    },
+    "ConflictResolution": {
+      "description": "How a conflict among evidence records was (or was not) settled.",
+      "enum": [
+        "unresolved",
+        "human_adjudicated",
+        "source_precedence",
+        "withdrawn"
+      ],
+      "title": "ConflictResolution",
+      "type": "string"
+    },
+    "DistributionPolicy": {
+      "description": "Redistribution policy for the *source material* (PDF, images).\n\nThis is deliberately separate from question publication: publishing a\nquestion never grants the right to redistribute the teacher's PDF.",
+      "enum": [
+        "unknown",
+        "no_redistribution",
+        "internal_only",
+        "redistributable"
+      ],
+      "title": "DistributionPolicy",
+      "type": "string"
+    },
+    "EvidenceBundle": {
+      "additionalProperties": false,
+      "description": "All evidence for one document, kept append-only.",
+      "properties": {
+        "records": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRecord"
+          },
+          "title": "Records",
+          "type": "array"
+        },
+        "conflicts": {
+          "items": {
+            "$ref": "#/$defs/EvidenceConflict"
+          },
+          "title": "Conflicts",
+          "type": "array"
+        }
+      },
+      "title": "EvidenceBundle",
+      "type": "object"
+    },
+    "EvidenceConflict": {
+      "additionalProperties": false,
+      "description": "A recorded disagreement between evidence records.\n\nConflicts are first-class: they are never silently dropped and never\nresolved by \"latest write wins\". The resolution field records *how* the\ndisagreement was settled, and ``resolved_by`` must be present whenever\nthe resolution is anything other than ``unresolved``.",
+      "properties": {
+        "conflict_id": {
+          "format": "uuid",
+          "title": "Conflict Id",
+          "type": "string"
+        },
+        "target_path": {
+          "minLength": 1,
+          "pattern": "^(/([^/~]|~[01])*)*$",
+          "title": "Target Path",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "is_critical": {
+          "default": false,
+          "title": "Is Critical",
+          "type": "boolean"
+        },
+        "resolution": {
+          "$ref": "#/$defs/ConflictResolution",
+          "default": "unresolved"
+        },
+        "resolved_by": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved By"
+        },
+        "resolved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved At"
+        },
+        "resolution_note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution Note"
+        },
+        "winning_evidence_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Winning Evidence Id"
+        }
+      },
+      "required": [
+        "target_path",
+        "evidence_ids"
+      ],
+      "title": "EvidenceConflict",
+      "type": "object"
+    },
+    "EvidenceRecord": {
+      "additionalProperties": false,
+      "description": "One piece of evidence for one target field.",
+      "properties": {
+        "evidence_id": {
+          "format": "uuid",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "target_path": {
+          "minLength": 1,
+          "pattern": "^(/([^/~]|~[01])*)*$",
+          "title": "Target Path",
+          "type": "string"
+        },
+        "evidence_role": {
+          "$ref": "#/$defs/EvidenceRole"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "locators": {
+          "items": {
+            "$ref": "#/$defs/SourceLocator"
+          },
+          "title": "Locators",
+          "type": "array"
+        },
+        "raw_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Value"
+        },
+        "normalized_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Value"
+        },
+        "evidence_status": {
+          "$ref": "#/$defs/EvidenceStatus",
+          "default": "active"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "collected_at": {
+          "format": "date-time",
+          "title": "Collected At",
+          "type": "string"
+        },
+        "collected_by": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collected By"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "target_path",
+        "evidence_role",
+        "source"
+      ],
+      "title": "EvidenceRecord",
+      "type": "object"
+    },
+    "EvidenceRole": {
+      "description": "What the evidence is evidence *of*.",
+      "enum": [
+        "answer",
+        "explanation",
+        "stem",
+        "option",
+        "material",
+        "table",
+        "asset",
+        "identity",
+        "other"
+      ],
+      "title": "EvidenceRole",
+      "type": "string"
+    },
+    "EvidenceStatus": {
+      "description": "Lifecycle of an individual evidence record.",
+      "enum": [
+        "active",
+        "superseded",
+        "disputed",
+        "resolved"
+      ],
+      "title": "EvidenceStatus",
+      "type": "string"
+    },
+    "ExpressionAnswer": {
+      "additionalProperties": false,
+      "description": "Mathematical expression or formula. Not evaluated by the contract.",
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "default": "exact",
+          "enum": [
+            "exact",
+            "normalized",
+            "numeric_tolerance",
+            "set",
+            "manual"
+          ],
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "expression",
+          "default": "expression",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "answer_value": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Answer Value",
+          "type": "string"
+        },
+        "notation": {
+          "default": "latex",
+          "enum": [
+            "latex",
+            "asciimath",
+            "plain"
+          ],
+          "title": "Notation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "answer_value"
+      ],
+      "title": "ExpressionAnswer",
+      "type": "object"
+    },
+    "FillBlankAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "default": "exact",
+          "enum": [
+            "exact",
+            "normalized",
+            "numeric_tolerance",
+            "set",
+            "manual"
+          ],
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "fill_blank",
+          "default": "fill_blank",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "answer_value": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Answer Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "answer_value"
+      ],
+      "title": "FillBlankAnswer",
+      "type": "object"
+    },
+    "ImageBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "image",
+          "default": "image",
+          "title": "Kind",
+          "type": "string"
+        },
+        "asset_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "alt_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt Text"
+        }
+      },
+      "required": [
+        "asset_id"
+      ],
+      "title": "ImageBlock",
+      "type": "object"
+    },
+    "IngestionIdentity": {
+      "additionalProperties": false,
+      "description": "Identity of one logical source object + one run that imported it.\n\nN5: at least one input hash is mandatory — an ingestion with no\nverifiable input identity is not traceable and not idempotent.",
+      "properties": {
+        "candidate_idempotency_key": {
+          "maxLength": 200,
+          "minLength": 16,
+          "title": "Candidate Idempotency Key",
+          "type": "string"
+        },
+        "ingestion_run_id": {
+          "format": "uuid",
+          "title": "Ingestion Run Id",
+          "type": "string"
+        },
+        "adapter_version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Adapter Version",
+          "type": "string"
+        },
+        "input_hashes": {
+          "$ref": "#/$defs/InputHashes"
+        },
+        "ingested_at": {
+          "format": "date-time",
+          "title": "Ingested At",
+          "type": "string"
+        },
+        "ingested_by": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ingested By"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "candidate_idempotency_key",
+        "adapter_version",
+        "input_hashes"
+      ],
+      "title": "IngestionIdentity",
+      "type": "object"
+    },
+    "InputHashes": {
+      "additionalProperties": false,
+      "description": "Content hashes of the artifacts an ingestion consumed.\n\nAt least one hash must be present: an ingestion with no identity is not\nidempotent and must be rejected by the importer.",
+      "properties": {
+        "manifest_hash": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Hash"
+        },
+        "source_md_hash": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Md Hash"
+        },
+        "source_pdf_hash": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Pdf Hash"
+        },
+        "upload_blob_hash": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upload Blob Hash"
+        }
+      },
+      "title": "InputHashes",
+      "type": "object"
+    },
+    "Material": {
+      "additionalProperties": false,
+      "description": "Shared reading material / stimulus used by a composite question.",
+      "properties": {
+        "material_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Material Id",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "blocks": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chemical": "#/$defs/ChemicalBlock",
+                "image": "#/$defs/ImageBlock",
+                "material_ref": "#/$defs/MaterialRef",
+                "math": "#/$defs/MathBlock",
+                "table": "#/$defs/TableBlock",
+                "text": "#/$defs/TextBlock"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextBlock"
+              },
+              {
+                "$ref": "#/$defs/MathBlock"
+              },
+              {
+                "$ref": "#/$defs/ChemicalBlock"
+              },
+              {
+                "$ref": "#/$defs/ImageBlock"
+              },
+              {
+                "$ref": "#/$defs/TableBlock"
+              },
+              {
+                "$ref": "#/$defs/MaterialRef"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "line_start": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Start"
+        },
+        "line_end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line End"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "material_id",
+        "blocks"
+      ],
+      "title": "Material",
+      "type": "object"
+    },
+    "MaterialRef": {
+      "additionalProperties": false,
+      "description": "Pointer to shared material used by one or more questions.",
+      "properties": {
+        "kind": {
+          "const": "material_ref",
+          "default": "material_ref",
+          "title": "Kind",
+          "type": "string"
+        },
+        "material_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Material Id",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        }
+      },
+      "required": [
+        "material_id"
+      ],
+      "title": "MaterialRef",
+      "type": "object"
+    },
+    "MathBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "math",
+          "default": "math",
+          "title": "Kind",
+          "type": "string"
+        },
+        "latex": {
+          "minLength": 1,
+          "title": "Latex",
+          "type": "string"
+        },
+        "display": {
+          "default": false,
+          "title": "Display",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "latex"
+      ],
+      "title": "MathBlock",
+      "type": "object"
+    },
+    "MultiChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "const": "set",
+          "default": "set",
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "multi_choice",
+          "default": "multi_choice",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "answer_value": {
+          "items": {
+            "maxLength": 4,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Answer Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "answer_value"
+      ],
+      "title": "MultiChoiceAnswer",
+      "type": "object"
+    },
+    "MultiStepAnswer": {
+      "additionalProperties": false,
+      "description": "A worked solution with ordered steps.",
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "default": "exact",
+          "enum": [
+            "exact",
+            "normalized",
+            "numeric_tolerance",
+            "set",
+            "manual"
+          ],
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "multi_step",
+          "default": "multi_step",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "answer_value": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Answer Value",
+          "type": "array"
+        },
+        "final_result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final Result"
+        }
+      },
+      "required": [
+        "answer_value"
+      ],
+      "title": "MultiStepAnswer",
+      "type": "object"
+    },
+    "NumericAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "default": "numeric_tolerance",
+          "enum": [
+            "numeric_tolerance",
+            "exact"
+          ],
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "numeric",
+          "default": "numeric",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "answer_value": {
+          "pattern": "^-?\\d+(\\.\\d+)?([eE][-+]?\\d+)?$",
+          "title": "Answer Value",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 50,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "tolerance": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tolerance"
+        }
+      },
+      "required": [
+        "answer_value"
+      ],
+      "title": "NumericAnswer",
+      "type": "object"
+    },
+    "OptionItem": {
+      "additionalProperties": false,
+      "description": "A single choice option.",
+      "properties": {
+        "label": {
+          "maxLength": 4,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "blocks": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chemical": "#/$defs/ChemicalBlock",
+                "image": "#/$defs/ImageBlock",
+                "material_ref": "#/$defs/MaterialRef",
+                "math": "#/$defs/MathBlock",
+                "table": "#/$defs/TableBlock",
+                "text": "#/$defs/TextBlock"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextBlock"
+              },
+              {
+                "$ref": "#/$defs/MathBlock"
+              },
+              {
+                "$ref": "#/$defs/ChemicalBlock"
+              },
+              {
+                "$ref": "#/$defs/ImageBlock"
+              },
+              {
+                "$ref": "#/$defs/TableBlock"
+              },
+              {
+                "$ref": "#/$defs/MaterialRef"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "line_start": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Start"
+        },
+        "line_end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line End"
+        }
+      },
+      "required": [
+        "label",
+        "blocks"
+      ],
+      "title": "OptionItem",
+      "type": "object"
+    },
+    "OwnerScope": {
+      "description": "Ownership / tenancy boundary for a candidate or question.",
+      "enum": [
+        "public_bank",
+        "school",
+        "teacher",
+        "student"
+      ],
+      "title": "OwnerScope",
+      "type": "string"
+    },
+    "PiiStatus": {
+      "enum": [
+        "none",
+        "suspected",
+        "confirmed"
+      ],
+      "title": "PiiStatus",
+      "type": "string"
+    },
+    "PreprocessingSource": {
+      "additionalProperties": false,
+      "description": "Source branch: teacher-edition paper already reviewed upstream.",
+      "properties": {
+        "source_type": {
+          "const": "preprocessing",
+          "default": "preprocessing",
+          "title": "Source Type",
+          "type": "string"
+        },
+        "source_document_id": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Source Document Id",
+          "type": "string"
+        },
+        "manifest_ref": {
+          "$ref": "#/$defs/SourceDocumentRef"
+        },
+        "source_md_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceDocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_pdf_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceDocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "annotated_md_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceDocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "$ref": "#/$defs/PreprocessingUnitRef"
+        },
+        "grade": {
+          "anyOf": [
+            {
+              "maxLength": 50,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grade"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "maxLength": 50,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject"
+        },
+        "answer_declaration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StrictAnswerDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "owner_scope": {
+          "$ref": "#/$defs/OwnerScope",
+          "default": "public_bank"
+        },
+        "pii_status": {
+          "$ref": "#/$defs/PiiStatus",
+          "default": "none"
+        },
+        "distribution_policy": {
+          "$ref": "#/$defs/DistributionPolicy",
+          "default": "unknown"
+        }
+      },
+      "required": [
+        "source_document_id",
+        "manifest_ref",
+        "unit"
+      ],
+      "title": "PreprocessingSource",
+      "type": "object"
+    },
+    "PreprocessingUnitRef": {
+      "additionalProperties": false,
+      "description": "One source unit from the upstream manifest.\n\nKept as a faithful *reference* to what upstream declared. The adapter\nmaps this into a question payload; it must not reinterpret it.",
+      "properties": {
+        "unit_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Unit Id",
+          "type": "string"
+        },
+        "unit_type": {
+          "$ref": "#/$defs/UnitType"
+        },
+        "question_numbers": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Question Numbers",
+          "type": "array"
+        },
+        "original_question_type": {
+          "anyOf": [
+            {
+              "maxLength": 50,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Question Type"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "printed_number": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Number"
+        },
+        "stem_lines": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stem Lines"
+        },
+        "options_lines": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Options Lines"
+        },
+        "answer_lines": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Lines"
+        },
+        "explanation_lines": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Explanation Lines"
+        },
+        "extra_lines": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extra Lines"
+        },
+        "material_lines": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Lines"
+        },
+        "questions_lines": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Questions Lines"
+        }
+      },
+      "required": [
+        "unit_id",
+        "unit_type"
+      ],
+      "title": "PreprocessingUnitRef",
+      "type": "object"
+    },
+    "QuestionBody": {
+      "additionalProperties": false,
+      "description": "The stem / options / materials of one question (or sub-question).\n\n``parent_question_ref`` is the structural link for composite questions:\na sub-question points at its parent's ``local_id``. Cycles and\nself-references are rejected.",
+      "properties": {
+        "local_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Local Id",
+          "type": "string"
+        },
+        "question_type": {
+          "$ref": "#/$defs/QuestionType"
+        },
+        "printed_number": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Number"
+        },
+        "stem_blocks": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chemical": "#/$defs/ChemicalBlock",
+                "image": "#/$defs/ImageBlock",
+                "material_ref": "#/$defs/MaterialRef",
+                "math": "#/$defs/MathBlock",
+                "table": "#/$defs/TableBlock",
+                "text": "#/$defs/TextBlock"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextBlock"
+              },
+              {
+                "$ref": "#/$defs/MathBlock"
+              },
+              {
+                "$ref": "#/$defs/ChemicalBlock"
+              },
+              {
+                "$ref": "#/$defs/ImageBlock"
+              },
+              {
+                "$ref": "#/$defs/TableBlock"
+              },
+              {
+                "$ref": "#/$defs/MaterialRef"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Stem Blocks",
+          "type": "array"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/OptionItem"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "material_ids": {
+          "items": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "title": "Material Ids",
+          "type": "array"
+        },
+        "parent_question_ref": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Question Ref"
+        },
+        "sub_question_ids": {
+          "items": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "title": "Sub Question Ids",
+          "type": "array"
+        },
+        "unit_type": {
+          "$ref": "#/$defs/UnitType",
+          "default": "standalone_question"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "local_id",
+        "question_type",
+        "stem_blocks"
+      ],
+      "title": "QuestionBody",
+      "type": "object"
+    },
+    "QuestionContent": {
+      "additionalProperties": false,
+      "description": "A full question payload: bodies + materials + assets.\n\nThe composite tree lives in ``bodies`` via ``parent_question_ref`` /\n``sub_question_ids``. Flattening for display is a view concern; the\nstored form keeps the tree.",
+      "properties": {
+        "bodies": {
+          "items": {
+            "$ref": "#/$defs/QuestionBody"
+          },
+          "minItems": 1,
+          "title": "Bodies",
+          "type": "array"
+        },
+        "materials": {
+          "items": {
+            "$ref": "#/$defs/Material"
+          },
+          "title": "Materials",
+          "type": "array"
+        },
+        "assets": {
+          "items": {
+            "$ref": "#/$defs/Asset"
+          },
+          "title": "Assets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "bodies"
+      ],
+      "title": "QuestionContent",
+      "type": "object"
+    },
+    "QuestionType": {
+      "description": "Canonical question taxonomy.\n\nCovers the types observed across real Preprocessing manifests\n(single/multi choice, true/false, fill-in, short answer, cloze,\ngrammar fill, reading, seven-to-five) plus the forms the direction\ndocument requires the model to hold (numeric, expression, chemical,\nmulti-step, composite sub-question).",
+      "enum": [
+        "single_choice",
+        "multi_choice",
+        "true_false",
+        "fill_blank",
+        "short_answer",
+        "numeric",
+        "expression",
+        "chemical",
+        "multi_step",
+        "essay",
+        "composite",
+        "cloze",
+        "grammar_fill",
+        "reading",
+        "reading_expression",
+        "seven_to_five"
+      ],
+      "title": "QuestionType",
+      "type": "string"
+    },
+    "SingleChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Display"
+        },
+        "accepted_alternatives": {
+          "items": {
+            "maxLength": 4,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Accepted Alternatives",
+          "type": "array"
+        },
+        "grading_rule": {
+          "default": "exact",
+          "enum": [
+            "exact",
+            "normalized",
+            "numeric_tolerance",
+            "set",
+            "manual"
+          ],
+          "title": "Grading Rule",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/AnswerEvidenceKind",
+          "default": "absent"
+        },
+        "completeness": {
+          "$ref": "#/$defs/AnswerCompleteness",
+          "default": "unknown"
+        },
+        "visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "answer_type": {
+          "const": "single_choice",
+          "default": "single_choice",
+          "title": "Answer Type",
+          "type": "string"
+        },
+        "answer_value": {
+          "maxLength": 4,
+          "minLength": 1,
+          "title": "Answer Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "answer_value"
+      ],
+      "title": "SingleChoiceAnswer",
+      "type": "object"
+    },
+    "SourceDocumentRef": {
+      "additionalProperties": false,
+      "description": "Reference to one source artifact of a preprocessing package.\n\n``content_hash`` is mandatory: an unhashed source is not traceable and\nmust not enter the formal bank. ``locator_uri`` is informational; the\ncontract layer never opens it.",
+      "properties": {
+        "doc_role": {
+          "enum": [
+            "manifest",
+            "source_markdown",
+            "source_pdf",
+            "annotated_markdown",
+            "other"
+          ],
+          "title": "Doc Role",
+          "type": "string"
+        },
+        "content_hash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "locator_uri": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locator Uri"
+        },
+        "byte_size": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Byte Size"
+        }
+      },
+      "required": [
+        "doc_role",
+        "content_hash"
+      ],
+      "title": "SourceDocumentRef",
+      "type": "object"
+    },
+    "SourceKind": {
+      "description": "Where a piece of evidence or content originated.",
+      "enum": [
+        "preprocessing_manifest",
+        "source_markdown",
+        "source_pdf",
+        "answer_table",
+        "explanation_prose",
+        "student_upload",
+        "ocr_output",
+        "human_review",
+        "derived"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
+    "SourceLocator": {
+      "additionalProperties": false,
+      "description": "A position inside a source document.\n\nLine numbers are 1-based inclusive, matching the Preprocessing manifests.\n``page`` is 1-based when the source is a PDF. ``bbox`` is\n``[x0, y0, x1, y1]`` in the PDF's own coordinate space when known.",
+      "properties": {
+        "kind": {
+          "default": "line_range",
+          "enum": [
+            "line_range",
+            "page_region",
+            "json_pointer",
+            "table_cell"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "line_start": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Start"
+        },
+        "line_end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line End"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "pointer": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^(/([^/~]|~[01])*)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pointer"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "Identity of a source artifact an evidence record points into.",
+      "properties": {
+        "source_id": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "content_hash": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Hash"
+        },
+        "locator_uri": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locator Uri"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_kind"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "StrictAnswerDeclaration": {
+      "additionalProperties": false,
+      "description": "How upstream declared this question's answer.\n\nThis is the contract-level encoding of the Strict boundary table:\n\n==============================  =========================================\nupstream situation              strict handling\n==============================  =========================================\nManifest declares the unit's    direct map\nanswer evidence\nStructured answer table with    deterministic conversion allowed;\nexplicit number→answer map      table-row evidence kept\nOnly a whole answer table or    ``incomplete``; do NOT infer\nprose explanation\n==============================  =========================================\n\n``attribution`` records which of the three cases applied. The adapter is\nforbidden from producing ``DECLARED`` or ``TABLE_ROW`` when the input did\nnot actually declare it — that is the \"no new semantic judgment\" rule.",
+      "properties": {
+        "attribution": {
+          "default": "not_attributable",
+          "enum": [
+            "declared",
+            "table_row",
+            "not_attributable"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "maxLength": 50,
+          "title": "Evidence Kind",
+          "type": "string"
+        },
+        "declared_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Declared Value"
+        },
+        "table_row_locator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table Row Locator"
+        },
+        "completeness": {
+          "$ref": "#/$defs/Completeness",
+          "default": "incomplete"
+        }
+      },
+      "required": [
+        "evidence_kind"
+      ],
+      "title": "StrictAnswerDeclaration",
+      "type": "object"
+    },
+    "TableBlock": {
+      "additionalProperties": false,
+      "description": "A table with explicit row/column structure.\n\n``cells`` is the authoritative representation; ``rows`` is the plain-text\nprojection (row → column → text) kept for cheap consumers. The two must\nagree: every non-merged position appears exactly once.",
+      "properties": {
+        "kind": {
+          "const": "table",
+          "default": "table",
+          "title": "Kind",
+          "type": "string"
+        },
+        "table_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table Id"
+        },
+        "n_rows": {
+          "minimum": 1,
+          "title": "N Rows",
+          "type": "integer"
+        },
+        "n_cols": {
+          "minimum": 1,
+          "title": "N Cols",
+          "type": "integer"
+        },
+        "cells": {
+          "items": {
+            "$ref": "#/$defs/TableCell"
+          },
+          "minItems": 1,
+          "title": "Cells",
+          "type": "array"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        }
+      },
+      "required": [
+        "n_rows",
+        "n_cols",
+        "cells"
+      ],
+      "title": "TableBlock",
+      "type": "object"
+    },
+    "TableCell": {
+      "additionalProperties": false,
+      "description": "One table cell.\n\nMerged cells are expressed on the *anchor* cell via ``rowspan`` /\n``colspan``; the covered positions must be omitted from the row arrays.\nA cell may carry rich content, not only plain text.",
+      "properties": {
+        "row_index": {
+          "minimum": 0,
+          "title": "Row Index",
+          "type": "integer"
+        },
+        "col_index": {
+          "minimum": 0,
+          "title": "Col Index",
+          "type": "integer"
+        },
+        "content": {
+          "default": "",
+          "title": "Content",
+          "type": "string"
+        },
+        "rowspan": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Rowspan",
+          "type": "integer"
+        },
+        "colspan": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Colspan",
+          "type": "integer"
+        },
+        "is_header": {
+          "default": false,
+          "title": "Is Header",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "row_index",
+        "col_index"
+      ],
+      "title": "TableCell",
+      "type": "object"
+    },
+    "TextBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text",
+          "default": "text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "line_start": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Start"
+        },
+        "line_end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line End"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextBlock",
+      "type": "object"
+    },
+    "UnitType": {
+      "description": "Structural role of a source unit in a paper.",
+      "enum": [
+        "standalone_question",
+        "composite_question",
+        "material",
+        "section"
+      ],
+      "title": "UnitType",
+      "type": "string"
+    },
+    "Visibility": {
+      "description": "Who may read a field's content.\n\n``review_only`` is what makes \"unpublished is not unreadable\" work:\nreview staff see the full content while students see nothing until\npublication plus the per-field visibility policy allows it.",
+      "enum": [
+        "review_only",
+        "student_after_submit",
+        "public"
+      ],
+      "title": "Visibility",
+      "type": "string"
+    },
+    "OcrObservation": {
+      "additionalProperties": false,
+      "description": "One OCR/NLP observation from a student upload.\n\nStudent uploads have no reviewed manifest. Everything the pipeline saw\nis an *observation* with a confidence, not a declaration.",
+      "properties": {
+        "observation_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "stem",
+            "option",
+            "answer",
+            "explanation",
+            "material",
+            "other"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Engine"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "observation_id",
+        "role",
+        "text"
+      ],
+      "title": "OcrObservation",
+      "type": "object"
+    },
+    "StudentUploadSource": {
+      "additionalProperties": false,
+      "description": "Source branch: a student's own practice material.\n\nF3 permission rules: student uploads are personal data. They never\ndefault to (and cannot claim) ``public_bank`` scope — promotion to the\npublic bank is an explicit later action, not an import side effect.\nPII defaults to ``suspected`` (a photo of homework may contain names)\nand distribution defaults to ``no_redistribution``.",
+      "properties": {
+        "source_type": {
+          "const": "student_upload",
+          "default": "student_upload",
+          "title": "Source Type",
+          "type": "string"
+        },
+        "source_document_id": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Source Document Id",
+          "type": "string"
+        },
+        "uploaded_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Uploaded By",
+          "type": "string"
+        },
+        "owner_scope": {
+          "$ref": "#/$defs/OwnerScope",
+          "default": "student"
+        },
+        "upload_blob_hash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Upload Blob Hash",
+          "type": "string"
+        },
+        "upload_filename": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upload Filename"
+        },
+        "mime_type": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mime Type"
+        },
+        "observations": {
+          "items": {
+            "$ref": "#/$defs/OcrObservation"
+          },
+          "title": "Observations",
+          "type": "array"
+        },
+        "answers_declared_absent": {
+          "default": false,
+          "title": "Answers Declared Absent",
+          "type": "boolean"
+        },
+        "explanations_declared_absent": {
+          "default": false,
+          "title": "Explanations Declared Absent",
+          "type": "boolean"
+        },
+        "pii_status": {
+          "$ref": "#/$defs/PiiStatus",
+          "default": "suspected"
+        },
+        "distribution_policy": {
+          "$ref": "#/$defs/DistributionPolicy",
+          "default": "no_redistribution"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "source_document_id",
+        "uploaded_by",
+        "upload_blob_hash"
+      ],
+      "title": "StudentUploadSource",
+      "type": "object"
+    },
+    "ApprovalRecord": {
+      "additionalProperties": false,
+      "description": "A reviewer's approval, bound to one exact revision.",
+      "properties": {
+        "approval_id": {
+          "format": "uuid",
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "revision_id": {
+          "format": "uuid",
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "content_hash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "approved_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Approved By",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "confirmed_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Confirmed Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "revision_id",
+        "content_hash",
+        "approved_by"
+      ],
+      "title": "ApprovalRecord",
+      "type": "object"
+    },
+    "PublicationRecord": {
+      "additionalProperties": false,
+      "description": "A publication event, bound to one exact approved revision.",
+      "properties": {
+        "publication_id": {
+          "format": "uuid",
+          "title": "Publication Id",
+          "type": "string"
+        },
+        "revision_id": {
+          "format": "uuid",
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "content_hash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/PublicationState"
+        },
+        "acted_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Acted By",
+          "type": "string"
+        },
+        "acted_at": {
+          "format": "date-time",
+          "title": "Acted At",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "revision_id",
+        "content_hash",
+        "state",
+        "acted_by"
+      ],
+      "title": "PublicationRecord",
+      "type": "object"
+    },
+    "PublicationState": {
+      "enum": [
+        "unpublished",
+        "published",
+        "withdrawn"
+      ],
+      "title": "PublicationState",
+      "type": "string"
+    },
+    "QuestionIdentity": {
+      "additionalProperties": false,
+      "description": "Stable identity of a logical question.",
+      "properties": {
+        "question_id": {
+          "format": "uuid",
+          "title": "Question Id",
+          "type": "string"
+        },
+        "identity_fingerprint": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 8,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Identity Fingerprint"
+        },
+        "embedding_ref": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Embedding Ref"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "title": "QuestionIdentity",
+      "type": "object"
+    },
+    "QuestionInstance": {
+      "additionalProperties": false,
+      "description": "One occurrence of a question inside one paper.",
+      "properties": {
+        "instance_id": {
+          "format": "uuid",
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "question_id": {
+          "format": "uuid",
+          "title": "Question Id",
+          "type": "string"
+        },
+        "revision_id": {
+          "format": "uuid",
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "source_document_id": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Source Document Id",
+          "type": "string"
+        },
+        "printed_number": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Number"
+        },
+        "question_numbers": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Question Numbers",
+          "type": "array"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "line_start": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Start"
+        },
+        "line_end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line End"
+        },
+        "ordinal": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question_id",
+        "revision_id",
+        "source_document_id"
+      ],
+      "title": "QuestionInstance",
+      "type": "object"
+    },
+    "ReviewState": {
+      "enum": [
+        "not_ready",
+        "pending_review",
+        "changes_requested",
+        "approved",
+        "rejected"
+      ],
+      "title": "ReviewState",
+      "type": "string"
+    },
+    "Revision": {
+      "additionalProperties": false,
+      "description": "One immutable content version of a question.",
+      "properties": {
+        "revision_id": {
+          "format": "uuid",
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "question_id": {
+          "format": "uuid",
+          "title": "Question Id",
+          "type": "string"
+        },
+        "revision_number": {
+          "minimum": 1,
+          "title": "Revision Number",
+          "type": "integer"
+        },
+        "content_hash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "question_type": {
+          "$ref": "#/$defs/QuestionType"
+        },
+        "content": {
+          "$ref": "#/$defs/QuestionContent"
+        },
+        "answers": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chemical": "#/$defs/ChemicalAnswer",
+                "composite": "#/$defs/CompositeAnswer",
+                "composite_sub": "#/$defs/CompositeSubAnswer",
+                "expression": "#/$defs/ExpressionAnswer",
+                "fill_blank": "#/$defs/FillBlankAnswer",
+                "multi_choice": "#/$defs/MultiChoiceAnswer",
+                "multi_step": "#/$defs/MultiStepAnswer",
+                "numeric": "#/$defs/NumericAnswer",
+                "single_choice": "#/$defs/SingleChoiceAnswer"
+              },
+              "propertyName": "answer_type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/SingleChoiceAnswer"
+              },
+              {
+                "$ref": "#/$defs/MultiChoiceAnswer"
+              },
+              {
+                "$ref": "#/$defs/FillBlankAnswer"
+              },
+              {
+                "$ref": "#/$defs/NumericAnswer"
+              },
+              {
+                "$ref": "#/$defs/ExpressionAnswer"
+              },
+              {
+                "$ref": "#/$defs/ChemicalAnswer"
+              },
+              {
+                "$ref": "#/$defs/MultiStepAnswer"
+              },
+              {
+                "$ref": "#/$defs/CompositeAnswer"
+              },
+              {
+                "$ref": "#/$defs/CompositeSubAnswer"
+              }
+            ]
+          },
+          "title": "Answers",
+          "type": "array"
+        },
+        "explanation_blocks": {
+          "items": {},
+          "title": "Explanation Blocks",
+          "type": "array"
+        },
+        "evidence": {
+          "$ref": "#/$defs/EvidenceBundle"
+        },
+        "answer_visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "explanation_visibility": {
+          "$ref": "#/$defs/Visibility",
+          "default": "review_only"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StateSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created By"
+        },
+        "change_note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Change Note"
+        }
+      },
+      "required": [
+        "question_id",
+        "revision_number",
+        "content_hash",
+        "question_type",
+        "content"
+      ],
+      "title": "Revision",
+      "type": "object"
+    },
+    "StateSnapshot": {
+      "additionalProperties": false,
+      "description": "The three-dimensional state of one Revision.\n\n``completeness``, ``review`` and ``publication`` are stored and\nvalidated together so the cross-axis rules can be checked in one place.",
+      "properties": {
+        "revision_id": {
+          "format": "uuid",
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "content_hash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "completeness": {
+          "$ref": "#/$defs/Completeness",
+          "default": "incomplete"
+        },
+        "review": {
+          "$ref": "#/$defs/ReviewState",
+          "default": "not_ready"
+        },
+        "publication": {
+          "$ref": "#/$defs/PublicationState",
+          "default": "unpublished"
+        },
+        "approval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApprovalRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "publication_record": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "revision_id",
+        "content_hash"
+      ],
+      "title": "StateSnapshot",
+      "type": "object"
+    }
+  }
+}

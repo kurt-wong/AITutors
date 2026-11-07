@@ -1,0 +1,257 @@
+{
+  "core": {
+    "answer_visibility": "review_only",
+    "answers": [
+      {
+        "accepted_alternatives": [],
+        "answer_display": null,
+        "answer_type": "fill_blank",
+        "answer_value": [
+          "0.10"
+        ],
+        "completeness": "unknown",
+        "evidence_kind": "absent",
+        "grading_rule": "exact",
+        "note": null,
+        "visibility": "review_only"
+      }
+    ],
+    "candidate_id": "00000000-0000-4000-8000-000000000001",
+    "completeness": "incomplete",
+    "content": {
+      "assets": [],
+      "bodies": [
+        {
+          "local_id": "sub1",
+          "material_ids": [],
+          "note": null,
+          "options": [],
+          "parent_question_ref": "parent",
+          "printed_number": "(1)",
+          "question_type": "fill_blank",
+          "stem_blocks": [
+            {
+              "kind": "text",
+              "line_end": null,
+              "line_start": null,
+              "text": "由表求 c ="
+            },
+            {
+              "caption": null,
+              "cells": [
+                {
+                  "col_index": 0,
+                  "colspan": 1,
+                  "content": "t/s",
+                  "is_header": true,
+                  "row_index": 0,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 1,
+                  "colspan": 1,
+                  "content": "pH",
+                  "is_header": true,
+                  "row_index": 0,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 2,
+                  "colspan": 1,
+                  "content": "c/(mol/L)",
+                  "is_header": true,
+                  "row_index": 0,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 0,
+                  "colspan": 1,
+                  "content": "0",
+                  "is_header": false,
+                  "row_index": 1,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 1,
+                  "colspan": 1,
+                  "content": "1.0",
+                  "is_header": false,
+                  "row_index": 1,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 2,
+                  "colspan": 1,
+                  "content": "0.10",
+                  "is_header": false,
+                  "row_index": 1,
+                  "rowspan": 1
+                }
+              ],
+              "kind": "table",
+              "n_cols": 3,
+              "n_rows": 2,
+              "table_id": "ph_table"
+            }
+          ],
+          "sub_question_ids": [],
+          "unit_type": "standalone_question"
+        },
+        {
+          "local_id": "parent",
+          "material_ids": [
+            "m1"
+          ],
+          "note": null,
+          "options": [],
+          "parent_question_ref": null,
+          "printed_number": "21",
+          "question_type": "composite",
+          "stem_blocks": [
+            {
+              "kind": "text",
+              "line_end": null,
+              "line_start": null,
+              "text": "某实验测得如下数据"
+            }
+          ],
+          "sub_question_ids": [
+            "sub1"
+          ],
+          "unit_type": "composite_question"
+        }
+      ],
+      "materials": [
+        {
+          "blocks": [
+            {
+              "caption": null,
+              "cells": [
+                {
+                  "col_index": 0,
+                  "colspan": 1,
+                  "content": "t/s",
+                  "is_header": true,
+                  "row_index": 0,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 1,
+                  "colspan": 1,
+                  "content": "pH",
+                  "is_header": true,
+                  "row_index": 0,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 2,
+                  "colspan": 1,
+                  "content": "c/(mol/L)",
+                  "is_header": true,
+                  "row_index": 0,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 0,
+                  "colspan": 1,
+                  "content": "0",
+                  "is_header": false,
+                  "row_index": 1,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 1,
+                  "colspan": 1,
+                  "content": "1.0",
+                  "is_header": false,
+                  "row_index": 1,
+                  "rowspan": 1
+                },
+                {
+                  "col_index": 2,
+                  "colspan": 1,
+                  "content": "0.10",
+                  "is_header": false,
+                  "row_index": 1,
+                  "rowspan": 1
+                }
+              ],
+              "kind": "table",
+              "n_cols": 3,
+              "n_rows": 2,
+              "table_id": "ph_table"
+            }
+          ],
+          "line_end": 12,
+          "line_start": 1,
+          "material_id": "m1",
+          "note": null,
+          "title": "实验数据表"
+        }
+      ]
+    },
+    "content_visibility": "review_only",
+    "created_at": "2026-01-01T00:00:00Z",
+    "created_by": null,
+    "evidence": {
+      "conflicts": [],
+      "records": []
+    },
+    "evidence_visibility": "review_only",
+    "explanation_visibility": "review_only",
+    "identity_fingerprint": "fp-student-upload-001",
+    "ingestion": {
+      "adapter_version": "strict-adapter/0.1.0",
+      "candidate_idempotency_key": "qk1_de85779f96c4942d5a0e85105168c25c6747af73",
+      "ingested_at": "2026-01-01T00:00:00Z",
+      "ingested_by": null,
+      "ingestion_run_id": "00000000-0000-4000-8000-000000000004",
+      "input_hashes": {
+        "manifest_hash": null,
+        "source_md_hash": null,
+        "source_pdf_hash": null,
+        "upload_blob_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "note": null
+    },
+    "note": null,
+    "question_type": "fill_blank"
+  },
+  "source": {
+    "answers_declared_absent": true,
+    "distribution_policy": "no_redistribution",
+    "explanations_declared_absent": false,
+    "mime_type": "image/jpeg",
+    "note": null,
+    "observations": [
+      {
+        "bbox": null,
+        "confidence": 0.82,
+        "engine": "mineru/local",
+        "note": null,
+        "observation_id": "obs1",
+        "page": 1,
+        "role": "stem",
+        "text": "某实验测得如下数据"
+      },
+      {
+        "bbox": null,
+        "confidence": null,
+        "engine": null,
+        "note": "OCR could not read the answer line",
+        "observation_id": "obs2",
+        "page": null,
+        "role": "answer",
+        "text": ""
+      }
+    ],
+    "owner_scope": "student",
+    "pii_status": "suspected",
+    "source_document_id": "student_upload/2026-02-01/a1",
+    "source_type": "student_upload",
+    "upload_blob_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "upload_filename": "week3_quiz.jpg",
+    "uploaded_by": "student:Kurtw"
+  },
+  "source_type": "student_upload"
+}
