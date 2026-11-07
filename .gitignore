@@ -41,11 +41,19 @@ desktop.ini
 .idea/
 
 # --- Runtime artifacts ---
-*.lock
 *.tmp
 *.log
 *.bak
 *.orig
+
+# --- Lock files (keep dependency locks) ---
+*.lock
+!poetry.lock
+!uv.lock
+!Cargo.lock
+!package-lock.json
+!yarn.lock
+!pnpm-lock.yaml
 
 # --- Secrets / Credentials ---
 .env
@@ -56,3 +64,32 @@ desktop.ini
 *.pfx
 credentials.json
 secrets.json
+*ocr_config*
+*llm_config*
+*.token
+
+# --- Exam data (never commit) ---
+*.pdf
+*.PDF
+*.manifest.json
+*_imgs/
+*_images/
+Ocr-markdown/
+original/
+maintainess/
+
+# --- Page/question/answer images ---
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.tiff
+*.tif
+
+# --- Databases ---
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
