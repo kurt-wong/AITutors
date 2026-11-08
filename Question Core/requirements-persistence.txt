@@ -3,6 +3,7 @@
 # included - the persistence layer uses synchronous SQLAlchemy).
 #
 # Install:  python -m pip install -r requirements-persistence.txt
+# Then install Strict Adapter extras:  python -m pip install -r requirements-strict-adapter.txt
 
 SQLAlchemy==2.0.50
 alembic==1.18.4
