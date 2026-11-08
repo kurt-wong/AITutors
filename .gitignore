@@ -67,6 +67,8 @@ secrets.json
 *ocr_config*
 *llm_config*
 *.token
+# ...but the infrastructure env TEMPLATE must be tracked (placeholders only).
+!Infrastructure/.env.example
 
 # --- Exam data (never commit) ---
 *.pdf
@@ -77,6 +79,11 @@ secrets.json
 Ocr-markdown/
 original/
 maintainess/
+
+# --- QCORE-E2E Run evidence (exam content, answers, explanations,
+#     OCR raw responses with signed URLs, execution logs — local only,
+#     never commit; see QCORE-E2E-01-B-CLOSURE C1) ---
+runs/
 
 # --- Page/question/answer images ---
 *.png
@@ -93,3 +100,11 @@ maintainess/
 *.sqlite
 *.sqlite3
 *.duckdb
+
+# --- Negation: allow synthetic test data and tech doc images ---
+!tests/fixtures/**
+!tests/**/synthetic/**
+!docs/**
+!Question Core/tests/fixtures/**
+!Question Core/tests/**/synthetic/**
+!Question Core/docs/**

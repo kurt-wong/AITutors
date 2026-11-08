@@ -1,0 +1,12 @@
+# Question Core persistence layer + PostgreSQL test dependencies.
+# Python 3.12.x, synchronous stack only (asyncpg is deliberately NOT
+# included - the persistence layer uses synchronous SQLAlchemy).
+#
+# Install:  python -m pip install -r requirements-persistence.txt
+
+SQLAlchemy==2.0.50
+alembic==1.18.4
+psycopg2-binary==2.9.12
+pytest==9.0.3
+pydantic==2.13.4
+jsonschema==4.26.0

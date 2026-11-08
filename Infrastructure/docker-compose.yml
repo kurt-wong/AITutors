@@ -1,0 +1,94 @@
+# AITutor infrastructure: PostgreSQL / MinIO / Redis.
+#
+# All three services bind to 127.0.0.1 only. Secrets come from the local
+# .env file (gitignored; see .env.example for the variable names).
+# Volume names are pinned with explicit `name:` so they are exactly
+# aitutor_postgresql_data / aitutor_minio_data / aitutor_redis_data and do
+# not gain a compose project prefix.
+
+name: aitutor-infra
+
+services:
+  postgresql:
+    image: postgres:16.15
+    container_name: Aitutor-postgresql
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:55432:5432"
+    environment:
+      # Bootstrap superuser: initialisation only, never the app account.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}
+      POSTGRES_DB: postgres
+      # Consumed by initdb/01-init-qcore.sh to create the qcore_app role.
+      QCORE_APP_PASSWORD: ${QCORE_APP_PASSWORD}
+    volumes:
+      - aitutor_postgresql_data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qcore_app -d qcore_dev_test"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+    networks:
+      - aitutor_net
+
+  minio:
+    # Official MinIO image pinned to the verified release (not :latest).
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: Aitutor-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "127.0.0.1:59000:9000"
+      - "127.0.0.1:59001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - aitutor_minio_data:/data
+    healthcheck:
+      # curl ships in this MinIO image; /minio/health/live is the liveness
+      # endpoint (verified against RELEASE.2025-09-07T16-13-09Z).
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - aitutor_net
+
+  redis:
+    # Fixed version tag (no floating :alpine / :latest).
+    image: redis:8.10.1-alpine
+    container_name: Aitutor-redis
+    restart: unless-stopped
+    # AOF persistence is explicitly enabled; RDB snapshots also remain on.
+    # The password is passed via container env so it does not appear in the
+    # command line.
+    command: ["sh", "-c", "exec redis-server --requirepass \"$${REDIS_PASSWORD}\" --appendonly yes --dir /data"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      - aitutor_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - aitutor_net
+
+volumes:
+  aitutor_postgresql_data:
+    name: aitutor_postgresql_data
+  aitutor_minio_data:
+    name: aitutor_minio_data
+  aitutor_redis_data:
+    name: aitutor_redis_data
+
+networks:
+  aitutor_net:
+    name: aitutor_net
+    driver: bridge
