@@ -1,8 +1,11 @@
 """Admission: contract validation → admission decision → state binding.
 
 准入原则（Owner 裁决）：可确定性映射的 Unit 一律准入为 Question
-（不因答案不完整丢题）；complete 者经契约状态机进入可供学生使用状态；
-incomplete 者按状态机规则不得 approve（StateSnapshot Rule 1），保留待审。
+（不因答案不完整丢题）。Admission 只绑定初始状态，不自动批准、不自动发布
+（QCORE-ADMISSION-01）：
+  complete   → complete   + pending_review + unpublished（待人审）
+  incomplete → incomplete + not_ready     + unpublished（Rule 1 不得 approve）
+批准与发布是后续人审动作（state.py transitions），本模块不代行。
 
 不复用 V3 Gate/Admission 实现——本模块是为当前 Strict Adapter 新写的确定性
 准入步骤。
@@ -19,15 +22,11 @@ from question_core.contracts.v1 import (
     QuestionInstance,
     Revision,
     StateSnapshot,
-    approve_revision,
     new_id,
-    publish_revision,
 )
 from question_core.contracts.v1 import candidate_adapter
 
 from .mapper import MappingContext, UnitMapping
-
-ADMISSION_ACTOR = "qcore-e2e-01-phase-c-admission"
 
 
 @dataclass
@@ -88,45 +87,26 @@ def admit(
     )
     log["admission"] = {"admitted": admitted, "reason": reason}
 
-    # ---- 3. 身份 / Revision / Instance ----
+    # ---- 3. 状态绑定（初始态；不自动批准、不自动发布）----
     qid = new_id()
     rid = new_id()
     iid = new_id()
     m = mapping.candidate
     content = m.core.content
 
-    if mapping.state_plan == "approve_publish":
-        snapshot0 = StateSnapshot(
+    # 按真实 completeness 绑定初始态（QCORE-ADMISSION-01）：
+    # complete 也只进 pending_review——批准/发布是人审动作，Admission 不代行；
+    # Rule 1: incomplete 不得 approve，保持 not_ready。
+    if m.core.completeness == Completeness.COMPLETE:
+        snapshot = StateSnapshot(
             revision_id=rid,
             content_hash=mapping.content_hash,
             completeness=Completeness.COMPLETE,
             review="pending_review",
             publication="unpublished",
         )
-        snapshot1 = approve_revision(
-            snapshot0,
-            approved_by=ADMISSION_ACTOR,
-            content_hash=mapping.content_hash,
-            confirmed_fields=["content", "answers", "evidence"],
-            note=(
-                "Phase-C Admission (E2E verification): complete candidate, "
-                "contract F2 satisfied. Production approval remains a human "
-                "review action."
-            ),
-        )
-        snapshot = publish_revision(
-            snapshot1,
-            acted_by=ADMISSION_ACTOR,
-            content_hash=mapping.content_hash,
-            note=(
-                "Phase-C student-usability verification: published so the "
-                "student API visibility path can be exercised end-to-end."
-            ),
-        )
-        history = (snapshot0, snapshot1, snapshot)
-        review_state, pub_state = "approved", "published"
+        review_state, pub_state = "pending_review", "unpublished"
     else:
-        # Rule 1: incomplete 不得 approve；保持 not_ready + unpublished。
         snapshot = StateSnapshot(
             revision_id=rid,
             content_hash=mapping.content_hash,
@@ -134,13 +114,17 @@ def admit(
             review="not_ready",
             publication="unpublished",
         )
-        history = (snapshot,)
         review_state, pub_state = "not_ready", "unpublished"
+    history = (snapshot,)
     log["state"] = {
         "review": review_state,
         "publication": pub_state,
         "completeness": mapping.completeness,
         "history_len": len(history),
+        "auto_approve": False,
+        "auto_publish": False,
+        # 遗留 state_plan 字段不再驱动任何状态动作，仅登记以备审计
+        "state_plan_not_executed": mapping.state_plan,
     }
 
     revision = Revision.create(
@@ -154,7 +138,7 @@ def admit(
         evidence=m.core.evidence,
         answer_visibility=m.core.answer_visibility,
         explanation_visibility=m.core.explanation_visibility,
-        created_by="qcore-e2e-01-phase-c",
+        created_by=ctx.run_id or "strict-adapter-admission",
         change_note="initial revision mapped by strict-adapter from sealed manifest",
         state=snapshot,
     )
@@ -170,7 +154,7 @@ def admit(
         line_start=mapping.instance_fields.get("line_start"),
         line_end=mapping.instance_fields.get("line_end"),
         ordinal=ordinal,
-        note="occurrence in 2020 全国Ⅰ卷化学（教师版）",
+        note=f"occurrence in {ctx.source_pdf_name}",
     )
 
     aggregate = QuestionAggregate(
