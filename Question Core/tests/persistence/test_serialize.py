@@ -192,7 +192,11 @@ class TestAggregateSerialization:
 
 class TestSchemaBaselineUntouched:
     def test_schema_hash_unchanged(self):
+        # 基线变更（QCORE-DELIVERY-01-C-R5，Owner 授权的最小契约清理）：
+        # 移除 QuestionType.COMPOSITE 枚举成员 → schema 形状变化，经审查后
+        # 重生成基线。旧冻结值（2026-11-07 起）：
+        #   0cba7f5a0c0f85bb024bbb99fda381f2a20e0e4a783390a1e4b3710a601a4f14
         expected = (
-            "0cba7f5a0c0f85bb024bbb99fda381f2a20e0e4a783390a1e4b3710a601a4f14"
+            "a09c051fd3da7be728655bbe376b9ae5e60796982205cc533ccd069c5b015dfd"
         )
         assert compute_schema_hash(build_json_schema()) == expected

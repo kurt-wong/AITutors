@@ -1154,7 +1154,7 @@ class TestF2MultiTypeDeclaredValueMatching:
             evidence_kind="answer_lines",
             completeness="full",
         )
-        cand = self._mk_candidate("9.D 10.B", [comp], "composite")
+        cand = self._mk_candidate("9.D 10.B", [comp], "short_answer")
         assert cand.core.completeness.value == "complete"
 
     def test_composite_full_match_paren_labels(self):
@@ -1188,7 +1188,7 @@ class TestF2MultiTypeDeclaredValueMatching:
             evidence_kind="answer_lines",
             completeness="full",
         )
-        cand = self._mk_candidate("(1).A (2).C", [comp], "composite")
+        cand = self._mk_candidate("(1).A (2).C", [comp], "short_answer")
         assert cand.core.completeness.value == "complete"
 
     # -- 6. 复合题缺少子答案拒绝 -------------------------------------------
@@ -1225,7 +1225,7 @@ class TestF2MultiTypeDeclaredValueMatching:
             completeness="full",
         )
         with pytest.raises(ValidationError, match="fully.*represented"):
-            self._mk_candidate("9.D", [comp], "composite")
+            self._mk_candidate("9.D", [comp], "short_answer")
 
     # -- 7. 复合题子答案不完整拒绝 -----------------------------------------
 
@@ -1261,7 +1261,7 @@ class TestF2MultiTypeDeclaredValueMatching:
             completeness="full",
         )
         with pytest.raises(ValidationError, match="completeness to be 'full'"):
-            self._mk_candidate("9.D 10.B", [comp], "composite")
+            self._mk_candidate("9.D 10.B", [comp], "short_answer")
 
     # -- 8. 多步骤完整对应 -------------------------------------------------
 
@@ -1407,7 +1407,7 @@ class TestF2CompositeSubInnerCompleteness:
 
         return PreprocessingCandidate(
             core=CandidateCore(
-                question_type="composite",
+                question_type="short_answer",
                 content=_content(),
                 answers=tuple(answers),
                 completeness="complete",
@@ -1576,7 +1576,7 @@ class TestF2CompositeSubInnerCompleteness:
         )
         cand = PreprocessingCandidate(
             core=CandidateCore(
-                question_type="composite",
+                question_type="short_answer",
                 content=_content(),
                 answers=(comp,),
                 completeness="incomplete",

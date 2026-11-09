@@ -123,7 +123,13 @@ class QuestionType(str, Enum):
     (single/multi choice, true/false, fill-in, short answer, cloze,
     grammar fill, reading, seven-to-five) plus the forms the direction
     document requires the model to hold (numeric, expression, chemical,
-    multi-step, composite sub-question).
+    multi-step).
+
+    ``composite`` / ``standalone`` are **Unit Type** concepts (organizational
+    structure), never Question Type (QCORE-DELIVERY-01-C-R5 cleanup): a
+    composite Unit is ONE Question whose internal sub-questions live in the
+    ``QuestionContent`` body tree (``parent_question_ref`` /
+    ``sub_question_ids``), each keeping its own real answer-form type.
     """
 
     SINGLE_CHOICE = "single_choice"
@@ -136,7 +142,6 @@ class QuestionType(str, Enum):
     CHEMICAL = "chemical"
     MULTI_STEP = "multi_step"
     ESSAY = "essay"
-    COMPOSITE = "composite"
     #: Observed in real English/Chinese papers; kept canonical so the
     #: adapter never has to degrade them to a catch-all.
     CLOZE = "cloze"

@@ -2417,7 +2417,7 @@
       "type": "object"
     },
     "QuestionType": {
-      "description": "Canonical question taxonomy.\n\nCovers the types observed across real Preprocessing manifests\n(single/multi choice, true/false, fill-in, short answer, cloze,\ngrammar fill, reading, seven-to-five) plus the forms the direction\ndocument requires the model to hold (numeric, expression, chemical,\nmulti-step, composite sub-question).",
+      "description": "Canonical question taxonomy.\n\nCovers the types observed across real Preprocessing manifests\n(single/multi choice, true/false, fill-in, short answer, cloze,\ngrammar fill, reading, seven-to-five) plus the forms the direction\ndocument requires the model to hold (numeric, expression, chemical,\nmulti-step).\n\n``composite`` / ``standalone`` are **Unit Type** concepts (organizational\nstructure), never Question Type (QCORE-DELIVERY-01-C-R5 cleanup): a\ncomposite Unit is ONE Question whose internal sub-questions live in the\n``QuestionContent`` body tree (``parent_question_ref`` /\n``sub_question_ids``), each keeping its own real answer-form type.",
       "enum": [
         "single_choice",
         "multi_choice",
@@ -2429,7 +2429,6 @@
         "chemical",
         "multi_step",
         "essay",
-        "composite",
         "cloze",
         "grammar_fill",
         "reading",

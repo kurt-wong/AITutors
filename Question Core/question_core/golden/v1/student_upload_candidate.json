@@ -106,7 +106,7 @@
           "options": [],
           "parent_question_ref": null,
           "printed_number": "21",
-          "question_type": "composite",
+          "question_type": "fill_blank",
           "stem_blocks": [
             {
               "kind": "text",

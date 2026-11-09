@@ -247,7 +247,7 @@ def build_student_upload_candidate() -> StudentUploadCandidate:
             ),
             QuestionBody(
                 local_id="parent",
-                question_type=QuestionType.COMPOSITE,
+                question_type=QuestionType.FILL_BLANK,
                 printed_number="21",
                 stem_blocks=[TextBlock(text="某实验测得如下数据")],
                 material_ids=["m1"],

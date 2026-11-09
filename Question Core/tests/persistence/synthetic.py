@@ -195,7 +195,7 @@ def make_rich_content() -> QuestionContent:
     )
     parent = QuestionBody(
         local_id="q1",
-        question_type=QuestionType.COMPOSITE,
+        question_type=QuestionType.SHORT_ANSWER,
         printed_number="12",
         stem_blocks=(
             TextBlock(text="题干文本", line_start=11, line_end=12),
@@ -342,7 +342,7 @@ def make_rich_revision(
         revision_id=rid,
         question_id=question_id,
         revision_number=revision_number,
-        question_type=QuestionType.COMPOSITE,
+        question_type=QuestionType.SHORT_ANSWER,
         content=content,
         answers=answers,
         explanation_blocks=explanation_blocks,
@@ -523,7 +523,7 @@ def make_preprocessing_candidate(
     core = CandidateCore(
         candidate_id=candidate_id
         or UUID("00000000-0000-4000-8000-0000000000c1"),
-        question_type=QuestionType.COMPOSITE,
+        question_type=QuestionType.SHORT_ANSWER,
         content=make_rich_content(),
         answers=make_all_answers(),
         evidence=make_rich_evidence(),

@@ -1,7 +1,7 @@
 {
   "contract_version": "1.0.0",
   "schema_id": "https://aitutor.example/schemas/question-core/contracts/v1",
-  "schema_hash": "0cba7f5a0c0f85bb024bbb99fda381f2a20e0e4a783390a1e4b3710a601a4f14",
+  "schema_hash": "a09c051fd3da7be728655bbe376b9ae5e60796982205cc533ccd069c5b015dfd",
   "schema_file": "schema/v1/question_core.schema.json",
   "generator": "question_core.contracts.v1.manifest",
   "root_models": [

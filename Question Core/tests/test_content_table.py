@@ -99,7 +99,7 @@ class TestCompositeTree:
             bodies=[
                 contract.QuestionBody(
                     local_id="parent",
-                    question_type="composite",
+                    question_type="short_answer",
                     stem_blocks=[contract.TextBlock(text="材料")],
                     sub_question_ids=["sub1", "sub2"],
                     unit_type="composite_question",
@@ -174,7 +174,7 @@ class TestCompositeTree:
                 bodies=[
                     contract.QuestionBody(
                         local_id="p",
-                        question_type="composite",
+                        question_type="short_answer",
                         stem_blocks=[contract.TextBlock(text="m")],
                         sub_question_ids=["s"],
                     ),

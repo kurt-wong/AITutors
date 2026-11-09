@@ -669,6 +669,16 @@ def _explanation_blocks(unit: dict, ctx: MappingContext, asset_sink: list, log: 
 
 
 def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
+    # 英语 composite（grammar_fill/cloze/reading/seven_to_five，且试卷在
+    # rules.ENGLISH_COMPOSITE_SCOPE_PAPERS 显式范围内）走专用确定性展开+
+    # 答案解码分支（QCORE-DELIVERY-01-C-R3）；其余（含语文同名 reading
+    # composite）走既有（n）标签路径，化学/语文代码不变。
+    if unit.get("unit_type") == "composite_question":
+        from . import english_composite
+
+        if english_composite.is_english_composite(unit, ctx):
+            return english_composite.map_unit(unit, ctx)
+
     unit_id = unit["unit_id"]
     log: dict = {"unit_id": unit_id}
     source_document_id = f"{ctx.paper_id}/{unit_id}"
