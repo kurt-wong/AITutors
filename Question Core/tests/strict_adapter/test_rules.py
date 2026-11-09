@@ -23,12 +23,12 @@ class TestKindToAttribution:
 
     def test_answer_lines_with_value_declared(self):
         unit = {"unit_id": "Q1", "answer_evidence": {"type": "answer_lines", "value": "D"}}
-        attribution, _ = rules.resolve_attribution(unit)
+        attribution, _ = rules.resolve_attribution(unit, "任意卷/Q1")
         assert attribution == "declared"
 
     def test_answer_lines_without_value_downgraded(self):
         unit = {"unit_id": "Q1", "answer_evidence": {"type": "answer_lines", "value": None}}
-        attribution, reason = rules.resolve_attribution(unit)
+        attribution, reason = rules.resolve_attribution(unit, "任意卷/Q1")
         assert attribution == "not_attributable"
         assert "forbids inventing" in reason
 
@@ -37,32 +37,51 @@ class TestKindToAttribution:
             "unit_id": "Q3",
             "answer_evidence": {"type": "inline_in_explanation", "value": "A"},
         }
-        attribution, _ = rules.resolve_attribution(unit)
+        attribution, _ = rules.resolve_attribution(unit, "任意卷/Q3")
         assert attribution == "not_attributable"
 
     def test_unknown_kind_fail_closed(self):
         unit = {"unit_id": "QX", "answer_evidence": {"type": "something_new", "value": "A"}}
-        attribution, reason = rules.resolve_attribution(unit)
+        attribution, reason = rules.resolve_attribution(unit, "任意卷/QX")
         assert attribution == "not_attributable"
         assert "fail-closed" in reason
 
 
 class TestOwnerOverrides:
-    def test_q10_forced_not_attributable(self):
+    """M1：覆盖规则按 source_document_id（paper/unit）限定，不跨卷。"""
+
+    CHEM = "2020全国I卷高考真题化学（教师版）(1)"
+    CHN = "2019江苏高考真题语文（教师版）(1)"
+
+    def test_chem_q10_forced_not_attributable(self):
         unit = {"unit_id": "Q10", "answer_evidence": {"type": "answer_lines", "value": "x"}}
-        attribution, reason = rules.resolve_attribution(unit)
+        attribution, reason = rules.resolve_attribution(unit, f"{self.CHEM}/Q10")
         assert attribution == "not_attributable"
         assert "P-1" in reason
 
-    def test_q12_forced_not_attributable(self):
+    def test_chem_q12_forced_not_attributable(self):
         unit = {"unit_id": "Q12", "answer_evidence": {"type": "answer_lines", "value": "x"}}
-        attribution, reason = rules.resolve_attribution(unit)
+        attribution, reason = rules.resolve_attribution(unit, f"{self.CHEM}/Q12")
         assert attribution == "not_attributable"
         assert "P-3" in reason
 
-    def test_q8_stays_declared(self):
+    def test_chn_q10_NOT_hit_by_chem_override(self):
+        """M1 定点验证：语文 Q10 不再误命中化学 P-1 覆盖。"""
+        unit = {"unit_id": "Q10", "answer_evidence": {"type": "answer_lines", "value": "x"}}
+        attribution, reason = rules.resolve_attribution(unit, f"{self.CHN}/Q10")
+        assert attribution == "declared"
+        assert "P-1" not in reason
+
+    def test_chn_q12_NOT_hit_by_chem_override(self):
+        """M1 定点验证：语文 Q12 不再误命中化学 P-3 覆盖。"""
+        unit = {"unit_id": "Q12", "answer_evidence": {"type": "answer_lines", "value": "x"}}
+        attribution, reason = rules.resolve_attribution(unit, f"{self.CHN}/Q12")
+        assert attribution == "declared"
+        assert "P-3" not in reason
+
+    def test_chem_q8_stays_declared(self):
         unit = {"unit_id": "Q8", "answer_evidence": {"type": "answer_lines", "value": "x"}}
-        attribution, _ = rules.resolve_attribution(unit)
+        attribution, _ = rules.resolve_attribution(unit, f"{self.CHEM}/Q8")
         assert attribution == "declared"
 
 
@@ -92,7 +111,7 @@ class TestQuestionType:
 
     def test_unknown_fail_closed(self):
         with pytest.raises(ValueError):
-            rules.question_type({"original_question_type": "essay"})
+            rules.question_type({"original_question_type": "nonexistent_qtype"})
 
 
 class TestSubjectMapping:

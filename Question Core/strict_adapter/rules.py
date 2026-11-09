@@ -33,23 +33,28 @@ KIND_TO_ATTRIBUTION: dict[str, str] = {
 # Owner 裁决覆盖（优先于默认映射）——阶段 B P-1 / P-3
 # 审计报告 §6.1：Q10 答案标签重复/顺序错乱/压缩合并；Q12 value 含非源文的
 # 图片语义描述。二者即使 answer_evidence.type=answer_lines 也不得声明 declared。
+#
+# QCORE-DELIVERY-01-C-R2 M1 最小修复：键从 unit_id 升为稳定的 source/document
+# identity（source_document_id = paper_id/unit_id），明确限定**来源试卷身份 +
+# Unit 身份**。原键仅 unit_id 会跨卷误伤（化学 P-1/P-3 裁决误命中语文同名
+# Q10/Q12）。这两条覆盖**仅适用于 2020 全国Ⅰ 化学卷**的 Q10/Q12。
 # ---------------------------------------------------------------------------
 
 OWNER_ATTRIBUTION_OVERRIDES: dict[str, str] = {
-    "Q10": "not_attributable",  # P-1
-    "Q12": "not_attributable",  # P-3
+    "2020全国I卷高考真题化学（教师版）(1)/Q10": "not_attributable",  # P-1 (chem only)
+    "2020全国I卷高考真题化学（教师版）(1)/Q12": "not_attributable",  # P-3 (chem only)
 }
 
 OWNER_OVERRIDE_REASONS: dict[str, str] = {
-    "Q10": (
-        "P-1 (audit §6.1): answer label duplication/order scrambling, "
-        "paragraph compression and semantic completion in manifest value; "
-        "per-item source attribution not confirmable"
+    "2020全国I卷高考真题化学（教师版）(1)/Q10": (
+        "P-1 (audit §6.1, 2020全国Ⅰ化学 Q10 only): answer label duplication/"
+        "order scrambling, paragraph compression and semantic completion in "
+        "manifest value; per-item source attribution not confirmable"
     ),
-    "Q12": (
-        "P-3 (audit §6.1): manifest value contains image semantic "
-        "descriptions absent from source lines; must not pose as source "
-        "answer evidence"
+    "2020全国I卷高考真题化学（教师版）(1)/Q12": (
+        "P-3 (audit §6.1, 2020全国Ⅰ化学 Q12 only): manifest value contains "
+        "image semantic descriptions absent from source lines; must not pose "
+        "as source answer evidence"
     ),
 }
 
@@ -70,12 +75,24 @@ COMPLETENESS_MAP: dict[str, str] = {
 COMPLETENESS_ORDER = {"absent": 0, "unknown": 1, "partial": 2, "full": 3}
 
 # ---------------------------------------------------------------------------
-# 原始题型 → 契约 QuestionType（仅本卷出现的取值；未知取值 fail-closed）
+# 原始题型 → 契约 QuestionType（三卷 manifest 声明的取值；未知取值 fail-closed）。
+# 目标值全部是 contracts.v1.common.QuestionType 既有枚举，不新增语义：同名恒等；
+# fill_in→fill_blank、multiple_choice→multi_choice 为同义命名转换（填空/多选）。
+# QCORE-DELIVERY-01-C 最小修复：原表仅化学卷两型，语文/英语卷声明的 reading/…
+# 会 fail-closed 阻断 26/38 units，故按契约既有枚举补齐确定性映射。
 # ---------------------------------------------------------------------------
 
 QUESTION_TYPE_MAP: dict[str, str] = {
     "single_choice": "single_choice",
     "short_answer": "short_answer",
+    "multiple_choice": "multi_choice",
+    "fill_in": "fill_blank",
+    "reading": "reading",
+    "reading_expression": "reading_expression",
+    "essay": "essay",
+    "cloze": "cloze",
+    "grammar_fill": "grammar_fill",
+    "seven_to_five": "seven_to_five",
 }
 
 # ---------------------------------------------------------------------------
@@ -106,15 +123,19 @@ SUB_LABEL_PATTERN = r"^[（(]\s*(\d+)\s*[）)]"
 # ---------------------------------------------------------------------------
 
 
-def resolve_attribution(unit: dict) -> tuple[str, str]:
-    """返回 (attribution, 依据说明)。禁止任何猜测：无 value 的 declared 降级。"""
+def resolve_attribution(unit: dict, source_document_id: str) -> tuple[str, str]:
+    """返回 (attribution, 依据说明)。禁止任何猜测：无 value 的 declared 降级。
+
+    ``source_document_id``（= paper_id/unit_id）限定覆盖规则的来源试卷身份 +
+    Unit 身份，避免仅凭题号跨卷误命中（M1）。
+    """
     unit_id = unit.get("unit_id", "")
     ev = unit.get("answer_evidence") or {}
     kind = ev.get("type") or "absent"
     value = ev.get("value")
 
-    if unit_id in OWNER_ATTRIBUTION_OVERRIDES:
-        return "not_attributable", OWNER_OVERRIDE_REASONS[unit_id]
+    if source_document_id in OWNER_ATTRIBUTION_OVERRIDES:
+        return "not_attributable", OWNER_OVERRIDE_REASONS[source_document_id]
 
     attribution = KIND_TO_ATTRIBUTION.get(kind)
     if attribution is None:

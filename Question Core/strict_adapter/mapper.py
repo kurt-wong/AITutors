@@ -671,7 +671,8 @@ def _explanation_blocks(unit: dict, ctx: MappingContext, asset_sink: list, log: 
 def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
     unit_id = unit["unit_id"]
     log: dict = {"unit_id": unit_id}
-    attribution, reason = resolve_attribution(unit)
+    source_document_id = f"{ctx.paper_id}/{unit_id}"
+    attribution, reason = resolve_attribution(unit, source_document_id)
     log["attribution"] = attribution
     log["attribution_reason"] = reason
     comp = answer_completeness(unit)
