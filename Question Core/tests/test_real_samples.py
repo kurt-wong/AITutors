@@ -1,4 +1,4 @@
-﻿"""Real Preprocessing samples: can the contract express them without
+"""Real Preprocessing samples: can the contract express them without
 re-guessing or losing semantics?
 
 Read-only. The test never modifies a manifest, markdown or PDF. It loads
@@ -159,7 +159,9 @@ class TestRichPackages:
         kind_to_attribution = {
             "answer_lines": "declared",
             "answer_table_row": "table_row",
-            "inline_in_explanation": "not_attributable",
+            # Phase 3（G-05，Owner 裁定）：解析区答案可声明归属。
+            # 旧对：inline_in_explanation → not_attributable（Phase 3 前口径）。
+            "inline_in_explanation": "declared",
             "range_string": "not_attributable",
             "absent": "not_attributable",
         }

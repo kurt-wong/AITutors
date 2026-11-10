@@ -57,6 +57,7 @@ class Asset(ContractModel):
         "diagram",
         "formula_render",
         "table_render",
+        "answer_image",
         "other",
     ] = "figure"
     target_path: JsonPointer | None = None

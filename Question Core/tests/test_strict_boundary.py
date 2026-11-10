@@ -49,12 +49,18 @@ class TestThreeCases:
         assert dec.completeness.value == "incomplete"
 
     def test_not_attributable_refuses_complete(self, contract):
-        with pytest.raises(ValidationError, match="must be marked incomplete"):
-            contract.StrictAnswerDeclaration(
-                attribution="not_attributable",
-                evidence_kind="explanation_prose",
-                completeness="complete",
-            )
+        # G-07 / Phase 3（Owner 授权）：归属轴与完整性轴解耦——
+        # not_attributable 不再强制 incomplete（完整性由内容维度独立判定）。
+        # 历史行为（1.0.0）：此构造抛 "must be marked incomplete"。
+        # 新规则下声明可构造；"不得声称 attributed" 由 F2 条件 2 在答案层校验
+        # （见 test_invariants.TestF2AttributionAxis）。
+        dec = contract.StrictAnswerDeclaration(
+            attribution="not_attributable",
+            evidence_kind="explanation_prose",
+            completeness="complete",
+        )
+        assert dec.attribution == "not_attributable"
+        assert dec.completeness.value == "complete"
 
     def test_declared_requires_value(self, contract):
         with pytest.raises(ValidationError, match="requires declared_value"):
@@ -143,13 +149,18 @@ class TestNoNewSemanticJudgment:
 class TestRealAnswerEvidenceKinds:
     """The kinds observed in real Preprocessing manifests must all be
     expressible (847 units across 46 packages: answer_lines 653,
-    inline_in_explanation 128, absent 49, range_string 17)."""
+    inline_in_explanation 128, absent 49, range_string 17).
+
+    Phase 3（G-05，Owner 裁定）：inline_in_explanation 的规范对由
+    (inline_in_explanation, not_attributable) 改为 (inline_in_explanation,
+    declared)——解析区答案可声明归属；旧对为 Phase 3 前口径。
+    """
 
     @pytest.mark.parametrize(
         "kind,attribution",
         [
             ("answer_lines", "declared"),
-            ("inline_in_explanation", "not_attributable"),
+            ("inline_in_explanation", "declared"),
             ("absent", "not_attributable"),
             ("range_string", "not_attributable"),
             ("answer_table", "table_row"),

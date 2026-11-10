@@ -237,15 +237,19 @@ def new_revision(
 
 
 def has_blocking_conflicts(evidence: "EvidenceBundle | None") -> bool:
-    """True when the evidence bundle carries unresolved critical conflicts.
+    """True when the evidence bundle carries blocking conflicts.
 
     Used both by the Revision validator (authoritative) and by the
     transition helpers (defense in depth) so an illegal ``approved`` or
     ``published`` state cannot be reached through either path.
+
+    Source-internal conflicts are preserved facts of the source document
+    and are not blockers (Owner D-2 / G-08); only unresolved critical
+    pipeline disagreements block.
     """
     if evidence is None:
         return False
-    return bool(evidence.unresolved_critical())
+    return bool(evidence.blocking_conflicts())
 
 
 def approve_revision(

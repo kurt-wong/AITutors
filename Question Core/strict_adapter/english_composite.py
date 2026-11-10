@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from question_core.contracts.v1 import (
     AnswerCompleteness,
     AnswerEvidenceKind,
+    AnswerStatement,
     Completeness,
     CompositeAnswer,
     CompositeSubAnswer,
@@ -34,6 +35,7 @@ from question_core.contracts.v1 import (
     QuestionContent,
     QuestionType,
     SingleChoiceAnswer,
+    SlotBinding,
     StrictAnswerDeclaration,
     UnitType,
 )
@@ -42,10 +44,14 @@ from .extract import extract_range
 from .mapper import (
     MappingContext,
     UnitMapping,
+    _annotate_conflicts,
     _answer_region_images,
     _blocks_from_raw,
     _build_evidence,
     _explanation_blocks,
+    _item_locators,
+    _item_statement,
+    _rebuild,
     _register_asset,
 )
 from .rules import answer_completeness, question_type, resolve_attribution
@@ -637,6 +643,50 @@ def decode_unit_answers(unit: dict, labels: list[str]) -> DecodeResult:
     qtype = unit.get("original_question_type") or ""
     errors: list[str] = []
 
+    # Phase 3（G-04）：Manifest answers[] 逐条为权威取值（sub_label ↔ value_text），
+    # 覆盖全部 question_numbers 时确定性成立；answers[] 存在但不完整/异常时
+    # fail-closed（不与旧字符串解码混源）；无 answers[] 时回退既有解码路径。
+    items = unit.get("answers") or []
+    if items:
+        by_label: dict[str, str] = {}
+        for it in items:
+            lb = str(it.get("sub_label") or "")
+            vt = it.get("value_text")
+            if vt is None:
+                errors.append(
+                    f"label {lb}: null value_text in answers[] "
+                    "(disputed/image slots are not handled by the english "
+                    "composite decode path)"
+                )
+                continue
+            if lb in by_label:
+                errors.append(f"label {lb}: duplicated in answers[]")
+                continue
+            by_label[lb] = vt
+        if errors:
+            return DecodeResult(
+                False, "manifest_answers_items", [], "", errors
+            )
+        if sorted(by_label, key=int) != sorted(labels, key=int):
+            return DecodeResult(
+                False,
+                "manifest_answers_items",
+                [],
+                "",
+                [
+                    f"answers[] labels {sorted(by_label, key=int)} != "
+                    f"question_numbers {sorted(labels, key=int)}"
+                ],
+            )
+        pairs = [(lb, by_label[lb]) for lb in labels]
+        return DecodeResult(
+            True,
+            "manifest_answers_items",
+            pairs,
+            normalize_declared_value(pairs),
+            [],
+        )
+
     if not raw:
         return DecodeResult(False, "absent", [], "", ["no declared answer value"])
 
@@ -693,45 +743,95 @@ def decode_unit_answers(unit: dict, labels: list[str]) -> DecodeResult:
 def build_composite_answer(
     unit: dict, decode: DecodeResult, transport: str
 ) -> CompositeAnswer | None:
-    """逐子 CompositeSubAnswer（值逐字保留）→ CompositeAnswer。"""
+    """逐子 CompositeSubAnswer（值逐字保留）→ CompositeAnswer。
+
+    Phase 3 增量（G-04/G-01）：answers[] 条目来源的 statements（source_region/
+    evidence_lines）与 slot_bindings（slot_id/sub_label）随答案落位；
+    attribution 由条目状态派生（resolved→attributed，disputed→disputed）。
+    """
     if not decode.ok:
         return None
     comp = AnswerCompleteness(transport)
     kind = (unit.get("answer_evidence") or {}).get("type") or "absent"
+    # DSH B2：逐答案 provenance 与 Manifest answer_evidence.type 一致
+    # （顶层/子问/inner 三层同源，不再硬编码 answer_lines）。
+    evidence_kind = (
+        AnswerEvidenceKind(kind) if kind != "absent" else AnswerEvidenceKind.ANSWER_LINES
+    )
     qtype = unit.get("original_question_type") or ""
+    unit_id = unit.get("unit_id") or "u"
+    items_by_label: dict[str, dict] = {}
+    for it in unit.get("answers") or []:
+        items_by_label[str(it.get("sub_label") or "")] = it
     subs = []
-    for label, value in decode.pairs:
+    for pos, (label, value) in enumerate(decode.pairs):
+        item = items_by_label.get(str(label), {})
+        item_statements = []
+        if item:
+            stmt_value = item.get("value_text")
+            if stmt_value is not None:
+                item_statements.append(
+                    _item_statement(
+                        item,
+                        statement_id=f"{unit_id.lower()}-st{pos + 1}",
+                        sub_label=str(label),
+                        slot_index=0 if qtype == "grammar_fill" else None,
+                        value_text=stmt_value,
+                        locators=_item_locators(item),
+                    )
+                )
+        sub_attr = (
+            "disputed"
+            if (item.get("status") == "disputed")
+            else "attributed"
+        )
         if qtype == "grammar_fill":
             inner = FillBlankAnswer(
                 answer_value=(value,),
                 answer_display=value,
-                evidence_kind=AnswerEvidenceKind.ANSWER_LINES,
+                evidence_kind=evidence_kind,
                 completeness=comp,
                 grading_rule="manual",
+                attribution=sub_attr,
+                statements=tuple(item_statements),
+                slot_bindings=(
+                    (
+                        SlotBinding(
+                            slot_index=0,
+                            slot_id=(item.get("slot_id") or f"{label}#1"),
+                            sub_label=str(label),
+                        ),
+                    )
+                    if item
+                    else ()
+                ),
                 note="verbatim manifest answer segment (multi-word values kept intact)",
             )
         else:
             inner = SingleChoiceAnswer(
                 answer_value=value,
                 answer_display=value,
-                evidence_kind=AnswerEvidenceKind.ANSWER_LINES,
+                evidence_kind=evidence_kind,
                 completeness=comp,
                 grading_rule="exact",
+                attribution=sub_attr,
+                statements=tuple(item_statements),
                 note=f"decoded via {decode.mode}; letter bound to printed label",
             )
         subs.append(
             CompositeSubAnswer(
-                sub_label=label,
+                sub_label=str(label),
                 answer_value=inner,
                 completeness=comp,
-                evidence_kind=AnswerEvidenceKind.ANSWER_LINES,
+                evidence_kind=evidence_kind,
+                attribution=sub_attr,
                 note=f"per-sub attribution established by {decode.mode} (R3 §5.1)",
             )
         )
     return CompositeAnswer(
         answer_value=tuple(subs),
         answer_display=decode.declared_value,
-        evidence_kind=AnswerEvidenceKind(kind) if kind != "absent" else AnswerEvidenceKind.ANSWER_LINES,
+        evidence_kind=evidence_kind,
         completeness=comp,
         grading_rule="manual",
         note=(
@@ -987,14 +1087,50 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         answers = (composite,) if composite else ()
     else:
         answers = ()
+    answers, conflict_specs = _annotate_conflicts(answers, unit, unit_id, log)
 
-    # 归属细化（R3 §5.1/§5.2）：range_string 仅在确定性解码成功且题号全覆盖时
-    # 获得逐题归属（默认 kind_to_attribution 保持不变，本分支限定使用）。
-    if decode.ok and attribution == "not_attributable" and decode.mode == "range_key":
+    # 逐条答案追踪（Phase 3 保真矩阵输入）：answers[] 条目 → 解码对/子答案位。
+    label_pos = {str(lb): i for i, (lb, _) in enumerate(decode.pairs)}
+    for idx, it in enumerate(unit.get("answers") or []):
+        lb = str(it.get("sub_label") or "")
+        if decode.ok and lb in label_pos:
+            disposition = "composite_sub_slot"
+            target = f"/answers/0/answer_value/{label_pos[lb]}"
+        else:
+            disposition = "unmapped"
+            target = None
+        log.setdefault("answers_trace", []).append(
+            {
+                "item_index": idx,
+                "sub_label": it.get("sub_label"),
+                "slot_id": it.get("slot_id"),
+                "value_text": it.get("value_text"),
+                "asset_ref": it.get("asset_ref"),
+                "form": it.get("form"),
+                "source_region": it.get("source_region"),
+                "evidence_lines": it.get("evidence_lines"),
+                "status": it.get("status"),
+                "disposition": disposition,
+                "target": target,
+                "unmapped_reason": (
+                    None if disposition != "unmapped" else
+                    "; ".join(decode.errors) or "decode failed"
+                ),
+            }
+        )
+
+    # 归属细化（R3 §5.1/§5.2 + Phase 3 answers[] 来源）：确定性逐题解码且
+    # 题号全覆盖时获得逐题归属（默认 kind_to_attribution 保持不变，本分支限定使用）。
+    if (
+        decode.ok
+        and attribution == "not_attributable"
+        and decode.mode in ("range_key", "manifest_answers_items")
+    ):
         attribution = "declared"
         reason = (
-            "R3 §5.1/§5.2: range_string deterministically decoded with exact "
-            "question-number coverage -> per-question attribution established"
+            f"R3 §5.1/§5.2: answer evidence deterministically decoded "
+            f"(mode={decode.mode}) with exact question-number coverage -> "
+            "per-question attribution established"
         )
         log["attribution"] = attribution
         log["attribution_reason"] = reason
@@ -1008,7 +1144,13 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         log["attribution_reason"] = reason
 
     evidence = _build_evidence(
-        unit, answers, ctx, attribution, log, extra_records=ans_img_records
+        unit,
+        answers,
+        ctx,
+        attribution,
+        log,
+        extra_records=ans_img_records,
+        conflict_specs=conflict_specs,
     )
     declaration = StrictAnswerDeclaration(
         attribution=attribution,
@@ -1025,10 +1167,10 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         a.completeness == AnswerCompleteness.FULL for a in answers
     )
     core_completeness = (
-        _C.COMPLETE
-        if (attribution != "not_attributable" and all_full)
-        else _C.INCOMPLETE
+        _C.COMPLETE if all_full else _C.INCOMPLETE
     )
+    declaration = _rebuild(declaration, completeness=core_completeness)
+    log["declaration"] = declaration.model_dump(mode="json")
     log["core_completeness_before_f2"] = core_completeness.value
 
     # ---- 4. 身份 / 证据链（与 mapper 相同口径）----

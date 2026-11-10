@@ -23,7 +23,7 @@ from pydantic import (
 # Contract identity
 # ---------------------------------------------------------------------------
 
-CONTRACT_VERSION = "1.0.0"
+CONTRACT_VERSION = "1.1.0"
 CONTRACT_SCHEMA_ID = (
     "https://aitutor.example/schemas/question-core/contracts/v1"
 )

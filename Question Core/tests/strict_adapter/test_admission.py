@@ -106,9 +106,11 @@ class TestNoAutoApproveOrPublish:
             assert snap.publication_record is None
         assert res.aggregate.published_revision() is None
 
-    @pytest.mark.parametrize("unit_id", ["Q3", "Q8"])
+    @pytest.mark.parametrize("unit_id", ["Q8", "Q10"])
     def test_incomplete_unit_binds_not_ready_unpublished(self, mappings, ctx, unit_id):
-        # Q3 = not_attributable（无 TypedAnswer）；Q8 = declared 但 completeness=unknown
+        # Q8 = declared 但 completeness=unknown；Q10 = P-1 归属冻结 + unknown。
+        # （原 Q3 用例已按 G-05/Phase 3 移至 test_q3_inline_answer_restored：
+        #  inline_in_explanation 不再导致 not_attributable/缺答案。）
         assert mappings[unit_id].completeness == "incomplete"
         res = admit(mappings[unit_id], ctx, ordinal=1)
         assert res.validated and res.admitted
@@ -121,6 +123,22 @@ class TestNoAutoApproveOrPublish:
         assert snap.publication == PublicationState.UNPUBLISHED
         assert snap.approval is None
         assert snap.publication_record is None
+
+    def test_q3_inline_answer_restored(self, mappings, ctx):
+        """Phase 3 G-05 回归：化学 Q3（inline_in_explanation）恢复 TypedAnswer，
+        不再被判 not_attributable/缺答案；admission 不自动审批/发布。"""
+        m = mappings["Q3"]
+        assert m.completeness == "complete"
+        assert len(m.candidate.core.answers) == 1
+        ans = m.candidate.core.answers[0]
+        assert ans.answer_type == "single_choice"
+        assert ans.answer_value == "A"
+        assert ans.evidence_kind.value == "inline_in_explanation"
+        assert ans.attribution == "attributed"
+        res = admit(m, ctx, ordinal=1)
+        assert res.validated and res.admitted
+        assert res.review_state == "pending_review"
+        assert res.publication_state == "unpublished"
 
     def test_all_twelve_units_never_approved_or_published(self, mappings, ctx):
         for unit_id, mapping in sorted(mappings.items()):

@@ -4,15 +4,20 @@
     "answers": [
       {
         "accepted_alternatives": [],
+        "answer_conflict": "none",
         "answer_display": null,
         "answer_type": "fill_blank",
         "answer_value": [
           "0.10"
         ],
+        "attribution": "attributed",
         "completeness": "unknown",
         "evidence_kind": "absent",
         "grading_rule": "exact",
+        "missing_reason": null,
         "note": null,
+        "slot_bindings": [],
+        "statements": [],
         "visibility": "review_only"
       }
     ],

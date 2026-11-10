@@ -91,6 +91,20 @@ class EvidenceRecord(ContractModel):
     raw_value: str | None = None
     #: Optional normalized value produced by a *deterministic* transform.
     normalized_value: str | None = None
+    #: Verbatim vs derived marker for ``raw_value`` (Phase 1 §八: a
+    #: compressed/combined/descriptive record must never pose as verbatim).
+    value_form: Literal["verbatim", "compressed", "combined", "descriptive"] = (
+        "verbatim"
+    )
+    #: Region of the source document the evidence was taken from.
+    source_region: Literal[
+        "answer_area",
+        "answer_table",
+        "explanation_area",
+        "stem_area",
+        "material",
+        "unknown",
+    ] = "unknown"
     evidence_status: EvidenceStatus = EvidenceStatus.ACTIVE
     visibility: Visibility = Visibility.REVIEW_ONLY
     collected_at: _dt = Field(default_factory=utc_now)
@@ -123,6 +137,14 @@ class EvidenceConflict(ContractModel):
     #: True when the disagreement is about an answer field and therefore
     #: blocks formal approval while unresolved.
     is_critical: bool = False
+    #: Origin split (Phase 1 §九 / G-08): ``source_internal`` = the source
+    #: document contradicts itself — preserved as fact, NOT a blocking
+    #: condition (Owner D-2: never auto-block import/publication on it);
+    #: ``pipeline_disagreement`` = the pipeline disagrees with itself —
+    #: keeps the historical blocking semantics, needs human handling.
+    conflict_origin: Literal["source_internal", "pipeline_disagreement"] = (
+        "pipeline_disagreement"
+    )
     resolution: ConflictResolution = ConflictResolution.UNRESOLVED
     resolved_by: ActorId | None = None
     resolved_at: _dt | None = None
@@ -160,6 +182,19 @@ class EvidenceBundle(ContractModel):
             c
             for c in self.conflicts
             if c.is_critical and c.resolution == ConflictResolution.UNRESOLVED
+        ]
+
+    def blocking_conflicts(self) -> list[EvidenceConflict]:
+        """Unresolved critical conflicts that block approve/publish.
+
+        Source-internal conflicts (``conflict_origin="source_internal"``)
+        are preserved facts of the source document and never block on their
+        own (Owner D-2 / G-08); only pipeline disagreements do.
+        """
+        return [
+            c
+            for c in self.unresolved_critical()
+            if c.conflict_origin != "source_internal"
         ]
 
     @model_validator(mode="after")

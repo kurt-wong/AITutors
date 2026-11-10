@@ -24,7 +24,7 @@ from uuid import UUID
 
 from pydantic import Field, TypeAdapter, model_validator
 
-from .answer import TypedAnswer
+from .answer import AssetSlot, TypedAnswer
 from .common import (
     ActorId,
     AnswerCompleteness,
@@ -115,19 +115,14 @@ class StrictAnswerDeclaration(ContractModel):
     declared_value: str | None = None
     #: For ``table_row``: the table row / cell the answer came from.
     table_row_locator: str | None = None
-    #: Completeness must be ``incomplete`` when attribution is
-    #: ``not_attributable``.
+    #: Content-axis completeness (orthogonal to ``attribution``, G-07):
+    #: not-attributable no longer forces ``incomplete``; completeness is
+    #: judged on the content axis and the attribution axis only forbids
+    #: claiming ``attributed`` where nothing is attributable.
     completeness: Completeness = Completeness.INCOMPLETE
 
     @model_validator(mode="after")
     def _strict_boundary(self) -> "StrictAnswerDeclaration":
-        if self.attribution == "not_attributable" and self.completeness != (
-            Completeness.INCOMPLETE
-        ):
-            raise ValueError(
-                "a not-attributable answer must be marked incomplete "
-                "(Strict boundary: do not infer)"
-            )
         if self.attribution == "declared" and not self.declared_value:
             raise ValueError("declared attribution requires declared_value")
         # F2: a table_row attribution must carry both a row locator and the
@@ -289,10 +284,18 @@ class PreprocessingCandidate(ContractModel):
         COMPLETE``):
 
         1. ``source.answer_declaration`` exists.
-        2. ``answer_declaration.attribution`` is not ``not_attributable``.
-        3. ``core.answers`` is non-empty.
-        4. Every answer's ``completeness`` is ``FULL``.
-        5. Every declared answer has a corresponding TypedAnswer object.
+        2. Attribution axis (G-07/G-12): when the declaration is
+           ``not_attributable``, no answer may claim ``attribution=
+           "attributed"`` (completeness itself is judged on the content
+           axis and is no longer tied to attribution).
+        3. ``core.answers`` is non-empty (skipped for essay questions —
+           Owner D-1: composition model text lives in Explanation and is
+           never a TypedAnswer; its absence is not a missing answer).
+        4. Every answer's ``completeness`` is ``FULL`` (skipped for essay;
+           see D-1).
+        5. Every declared answer has a corresponding TypedAnswer object
+           (skipped for essay: the declared model text is represented in
+           Explanation, not in TypedAnswer).
 
         Incomplete candidates remain fully constructible and reviewable —
         they simply cannot masquerade as complete.  StudentUploadCandidate
@@ -301,11 +304,7 @@ class PreprocessingCandidate(ContractModel):
         dec = self.source.answer_declaration
 
         if self.core.completeness != Completeness.COMPLETE:
-            # Incomplete is always allowed.  But even so, if an explicit
-            # declaration says "not_attributable", the completeness must
-            # be incomplete (already enforced below for the complete case;
-            # keep the invariant for the incomplete case too — it can only
-            # be incomplete).
+            # Incomplete is always allowed.
             return self
 
         # ---- from here on, core.completeness == COMPLETE ----
@@ -319,13 +318,23 @@ class PreprocessingCandidate(ContractModel):
                 "comes from)"
             )
 
-        # 2. Must be attributable.
+        # 2. Attribution axis: a not-attributable declaration must not be
+        #    paired with answers that claim full attribution.
         if dec.attribution == "not_attributable":
-            raise ValueError(
-                "core.completeness=complete requires an attributable "
-                "answer_declaration (attribution=not_attributable means "
-                "the answer cannot be located and must stay incomplete)"
-            )
+            for ans in self.core.answers:
+                if getattr(ans, "attribution", "attributed") == "attributed":
+                    raise ValueError(
+                        "a not_attributable answer_declaration must not be "
+                        "paired with answers claiming attribution='attributed' "
+                        "(G-07: attribution and completeness are orthogonal; "
+                        "answers of a not-attributable declaration may only "
+                        "be partially_attributed/unattributed/disputed)"
+                    )
+
+        # Essay (Owner D-1): composition model text is Explanation content,
+        # never a TypedAnswer; absence of TypedAnswer is not a missing answer.
+        if self.core.question_type == QuestionType.ESSAY:
+            return self
 
         # 3. Answers must be present.
         if not self.core.answers:
@@ -351,7 +360,9 @@ class PreprocessingCandidate(ContractModel):
         Covers the full chain:
 
         * ``composite``        → recurse into each ``CompositeSubAnswer``
-        * ``composite_sub``    → recurse into its inner ``TypedAnswer``
+        * ``composite_sub``    → recurse into its inner ``TypedAnswer``;
+          an inner ``None`` (missing sub-answer) can never be FULL and is
+          reported explicitly instead of crashing (G-12).
         * any other type       → leaf check on its own ``completeness``
 
         A wrapper marked ``full`` must never mask a partial inner answer.
@@ -370,6 +381,12 @@ class PreprocessingCandidate(ContractModel):
             for sub in ans.answer_value:
                 PreprocessingCandidate._assert_answer_fully_complete(sub)
         elif atype == "composite_sub":
+            if ans.answer_value is None:
+                raise ValueError(
+                    "core.completeness=complete requires every "
+                    "composite_sub to carry an answer; a sub-answer of "
+                    "None (missing) is never full (G-12)"
+                )
             PreprocessingCandidate._assert_answer_fully_complete(
                 ans.answer_value
             )
@@ -424,8 +441,10 @@ STRICT_BOUNDARY_RULES: dict[str, str] = {
         "question-number to answer mapping; keep the table-row evidence"
     ),
     "not_attributable": (
-        "mark incomplete; do not infer the answer from prose or from an "
-        "unattributed whole-table blob"
+        "do not infer the answer from prose or from an unattributed "
+        "whole-table blob; answers of such a declaration must not claim "
+        "attribution='attributed' (G-07: completeness is judged on the "
+        "content axis, independently of attribution)"
     ),
 }
 
@@ -588,9 +607,36 @@ def _answer_matches_declared(answer, declared_norm: str) -> bool:
         items = _parse_blank_items(declared_norm, len(blanks))
         if items is None:
             return False
-        return all(
-            _norm(a) == _norm(b) for a, b in zip(items, blanks)
-        )
+        for i, (item, blank) in enumerate(zip(items, blanks)):
+            if blank is None:
+                # Disputed blank (G-12): the declared segment must be
+                # missing/empty at this position, or one of the recorded
+                # conflict-version texts — never a silent side pick.
+                if not item.strip():
+                    continue
+                versions = {
+                    _norm(s.value_text)
+                    for s in getattr(answer, "statements", ())
+                    if s.slot_index == i
+                }
+                if _norm(item) not in versions:
+                    return False
+                continue
+            if isinstance(blank, AssetSlot):
+                # Image blank (G-12): compare by asset id set — the declared
+                # segment must reference one of the slot's assets.
+                assets = getattr(blank, "assets", ())
+                refs = []
+                for a in assets:
+                    aid = getattr(a, "asset_id", "")
+                    refs.append(_norm(aid))
+                    refs.append(_norm(aid.rsplit(".", 1)[0]))
+                if not any(r and r in _norm(item) for r in refs):
+                    return False
+                continue
+            if _norm(str(blank)) != _norm(item):
+                return False
+        return True
 
     if atype == "composite_sub":
         return _answer_matches_declared(answer.answer_value, declared_norm)
@@ -616,15 +662,24 @@ def _match_composite(answer, declared_norm: str) -> bool:
         return False
 
     sub_map: dict[str, object] = {}
+    none_keys: set[str] = set()
     for sub in answer.answer_value:
         key = _norm_composite_key(sub.sub_label)
-        if key in sub_map:
+        if key in sub_map or key in none_keys:
             return False  # duplicate sub-label → ambiguous
+        if getattr(sub, "answer_value", None) is None:
+            # G-12: a missing sub-answer is consistent only when the
+            # declared segment for that sub is absent.
+            none_keys.add(key)
+            continue
         sub_map[key] = sub
 
-    # Every declared pair must map to a sub-answer, and every sub-answer
-    # must be covered.  Partial coverage is not enough.
+    # Every declared pair must map to a valued sub-answer, and every valued
+    # sub-answer must be covered.  Missing sub-answers require their declared
+    # segment to be absent.  Partial coverage is not enough.
     if set(pairs.keys()) != set(sub_map.keys()):
+        return False
+    if none_keys & set(pairs.keys()):
         return False
 
     for key, declared_val in pairs.items():

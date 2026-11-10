@@ -36,6 +36,9 @@ from .common import (
     utc_now,
 )
 from .answer import (
+    AnswerAssetRef,
+    AnswerStatement,
+    AssetSlot,
     ChemicalAnswer,
     CompositeAnswer,
     CompositeSubAnswer,
@@ -45,6 +48,7 @@ from .answer import (
     MultiStepAnswer,
     NumericAnswer,
     SingleChoiceAnswer,
+    SlotBinding,
     TypedAnswer,
     typed_answer_adapter,
 )
@@ -118,8 +122,11 @@ from .manifest import (
 __all__ = [
     "ALL_MODELS",
     "Asset",
+    "AssetSlot",
+    "AnswerAssetRef",
     "AnswerCompleteness",
     "AnswerEvidenceKind",
+    "AnswerStatement",
     "ActorId",
     "ApprovalRecord",
     "BBox",
@@ -173,6 +180,7 @@ __all__ = [
     "STRICT_BOUNDARY_RULES",
     "Sha256Hex",
     "SingleChoiceAnswer",
+    "SlotBinding",
     "SourceDocumentRef",
     "SourceKind",
     "SourceLocator",

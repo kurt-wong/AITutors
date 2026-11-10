@@ -510,12 +510,18 @@ class TestRegressionGuard:
     # C-R2 基线（A_CORRECTION/B1_db_readback_reconstruction.json）；Q10 为 M1
     # 归属修复后的期望哈希（QC​ORE-ADMISSION-01 隔离验证确认，基线 f6e7a1c6… 为
     # 修前值，差异属预期）。
+    # Phase 3 基线更新（QCORE-ANSWER-FIDELITY-03 答案保真修复）：answers 载荷
+    # 增加 statements/slot_bindings/attribution 字段（G-01/G-04/G-07），且旧格式
+    # manifest（无 answers[]）改走"整值保留 + combined 语句"路径（不再 '；' 切分）
+    # → content_hash 有意变化。本守卫的**主断言**（不被英语分支劫持：路径/
+    # sub_specs 检查）不变。旧 C-R2 基线（2026-11 前）：
+    #   Q5 90b72cd8…  Q6 004487a8…  Q8 9b7fd0a4…  Q9 46a7c73a…  Q10 253b5db1…
     CHN_EXPECTED_HASHES = {
-        "Q5": "90b72cd87942d7bfaa4da9efb44462427e85707351d0e41612d558f56ac6c9a2",
-        "Q6": "004487a84ccbb54de0d80d768f4b54b720a169d714b3cab8be3680b3ce811b43",
-        "Q8": "9b7fd0a40a000478de2d4a025dd815ceff0c3ffd975f27449487d5fc839f51f7",
-        "Q9": "46a7c73abfdb9e1fbb6eb2085e7307f0ce795dd3665782659ad76ffdc885e1fe",
-        "Q10": "253b5db16af0c7722fb25cbc88552d166e22876397d29542cf532f551a04196d",
+        "Q5": "0a913627a9575a77a1c2dad05b86a9c730e649d0679525c1966ed062d1160c7a",
+        "Q6": "dce8b1e875cecf63237775838cb21d5cdd192107b147ef7369107ae02736b097",
+        "Q8": "af4b01eebe4e451bb6af47e9b04d64030c76ae9fa6d59712d5e169766a3c1360",
+        "Q9": "2959b0852a1363890f400f7123a0b6490263a164a43a979507f778ddc170e8a3",
+        "Q10": "556aadb242e6d4b4a59b2fa66b631ce799288f8e9231c382221a519a58c89a80",
     }
 
     @pytest.fixture(scope="class")

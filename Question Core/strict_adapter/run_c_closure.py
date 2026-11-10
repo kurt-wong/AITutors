@@ -229,6 +229,10 @@ def main() -> int:
     engine = create_db_engine(DatabaseSettings.from_env())
 
     # ---- BEFORE 快照 ----
+    # BEFORE 快照（Phase 3 F 作用域确认：下列 ("Q10","Q12") 是**本驱动运行自身**
+    # phase_c_rb 单卷报告内的目标 unit 清单，不是 OWNER_ATTRIBUTION_OVERRIDES
+    # 式跨卷策略判断；qid_by_unit 只含本运行单卷条目，不会命中其他试卷同名题。
+    # 跨卷作用域策略判定一律走 rules.owner_override_reason(paper_id/unit_id)。
     before = {"captured_at": now(), "items": {}}
     with session_scope(engine) as session:
         repo = QuestionCoreRepository(session)

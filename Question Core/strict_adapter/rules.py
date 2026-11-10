@@ -24,7 +24,10 @@ from . import ADAPTER_VERSION
 KIND_TO_ATTRIBUTION: dict[str, str] = {
     "answer_lines": "declared",
     "answer_table_row": "table_row",
-    "inline_in_explanation": "not_attributable",
+    # G-05（Phase 1 通知项，Owner 已裁定）：答案位于解析区只影响证据形态标注
+    # （evidence_kind/source_region），不得再否定题目级归属。旧值
+    # "not_attributable" 是缺陷口径（化学 Q3/语文 Q2 答案被丢弃）。
+    "inline_in_explanation": "declared",
     "range_string": "not_attributable",
     "absent": "not_attributable",
 }
@@ -163,6 +166,17 @@ def resolve_attribution(unit: dict, source_document_id: str) -> tuple[str, str]:
     return attribution, f"contract kind_to_attribution[{kind!r}]"
 
 
+def owner_override_reason(source_document_id: str) -> str | None:
+    """P-1/P-3 归属口径冻结的纸卷作用域判定（Phase 3 G-05/F）。
+
+    键为 ``paper_id/unit_id``；禁止用裸 ``unit_id`` 跨卷判断（化学 Q10/Q12
+    与语文 Q10/Q12 同名，裸键会误伤）。命中时返回冻结原因；未命中返回 None。
+    命中语义（Phase 1 G-07 + DSH Phase3 基线 §3.4）：答案内容全部保留，
+    ``attribution="disputed"``（归属口径冻结），不得再走"丢答案"路径。
+    """
+    return OWNER_OVERRIDE_REASONS.get(source_document_id)
+
+
 def answer_completeness(unit: dict) -> str:
     """transport 字段映射；不得使用 answer_completeness_semantic。"""
     raw = (unit.get("answer_completeness") or "unknown").lower()
@@ -190,6 +204,7 @@ __all__ = [
     "QUESTION_TYPE_MAP",
     "SUB_LABEL_PATTERN",
     "answer_completeness",
+    "owner_override_reason",
     "question_type",
     "resolve_attribution",
 ]

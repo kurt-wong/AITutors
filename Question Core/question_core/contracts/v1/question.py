@@ -96,13 +96,13 @@ class Revision(ContractModel):
             if self.state.content_hash != self.content_hash:
                 raise ValueError("state.content_hash must equal revision.content_hash")
             # F1: an unresolved critical evidence conflict must block both
-            # approval and publication. The reviewer may *see* the conflict
-            # (review staff can always read full content), but the revision
-            # must not enter approved/published while it stands.
+            # approval and publication — except source-internal conflicts
+            # (the source document contradicts itself: preserved as fact,
+            # never an approval/publication blocker — Owner D-2 / G-08).
             if self.state.review in (
                 ReviewState.APPROVED,
             ) or self.state.publication == PublicationState.PUBLISHED:
-                blocking = self.evidence.unresolved_critical()
+                blocking = self.evidence.blocking_conflicts()
                 if blocking:
                     targets = ", ".join(c.target_path for c in blocking)
                     raise ValueError(

@@ -1,4 +1,4 @@
-﻿"""Contract Manifest: the generated, versioned description of this contract.
+"""Contract Manifest: the generated, versioned description of this contract.
 
 The Pydantic models are the single source of truth. Everything here is
 *derived*: the JSON Schema, the Contract Manifest, and the schema hash.
@@ -37,6 +37,9 @@ ROOT_MODELS: list[type[ContractModel]] = [
 #: Every model class that belongs to the contract surface, for the manifest
 #: inventory.
 ALL_MODELS: list[type[ContractModel]] = [
+    _answer.AnswerAssetRef,
+    _answer.AnswerStatement,
+    _answer.AssetSlot,
     _answer.ChemicalAnswer,
     _answer.CompositeAnswer,
     _answer.CompositeSubAnswer,
@@ -46,6 +49,7 @@ ALL_MODELS: list[type[ContractModel]] = [
     _answer.MultiStepAnswer,
     _answer.NumericAnswer,
     _answer.SingleChoiceAnswer,
+    _answer.SlotBinding,
     _candidate.CandidateCore,
     _candidate.OcrObservation,
     _candidate.PreprocessingCandidate,

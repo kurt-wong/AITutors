@@ -1,4 +1,4 @@
-﻿"""Schema generation, JSON Schema 2020-12 validity, hash and golden snapshot."""
+"""Schema generation, JSON Schema 2020-12 validity, hash and golden snapshot."""
 
 from __future__ import annotations
 
@@ -90,6 +90,24 @@ class TestSchemaHash:
         }
         assert "Revision" in manifest.models
         assert "EvidenceRecord" in manifest.models
+
+    def test_manifest_inventory_covers_schema_defs(self, schema_doc, contract):
+        """DSH B3 工件一致性：schema $defs 中的契约模型必须都在 ALL_MODELS
+        （contract_manifest.models），工件不得自相矛盾。根模型在 schema 顶层
+        properties 锚定，允许不在 $defs。"""
+        manifest = contract.build_manifest()
+        defs = schema_doc["$defs"]
+        model_defs = {
+            name
+            for name, defn in defs.items()
+            if isinstance(defn, dict)
+            and ("properties" in defn or defn.get("type") == "object")
+        }
+        missing = model_defs - set(manifest.models)
+        assert not missing, f"contract models missing from ALL_MODELS: {sorted(missing)}"
+        roots = set(manifest.root_models)
+        extra = set(manifest.models) - model_defs - roots
+        assert not extra, f"ALL_MODELS entries absent from schema $defs: {sorted(extra)}"
 
 
 class TestGoldenSnapshot:

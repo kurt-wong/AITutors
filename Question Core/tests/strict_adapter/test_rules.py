@@ -14,10 +14,16 @@ from strict_adapter import rules  # noqa: E402
 
 class TestKindToAttribution:
     def test_contract_reference_pairs(self):
-        """tests/test_strict_boundary.py:148-156 参数化对必须一致。"""
+        """tests/test_strict_boundary.py:148-156 参数化对必须一致。
+
+        Phase 3（G-05，Owner 已裁定）：inline_in_explanation 由
+        "not_attributable" 改为 "declared"——答案位于解析区只影响证据形态
+        标注，不得否定题目级归属（化学 Q3/语文 Q2 答案曾因此被丢弃）。
+        旧口径（Phase 3 前）：inline_in_explanation → not_attributable。
+        """
         assert rules.KIND_TO_ATTRIBUTION["answer_lines"] == "declared"
         assert rules.KIND_TO_ATTRIBUTION["answer_table_row"] == "table_row"
-        assert rules.KIND_TO_ATTRIBUTION["inline_in_explanation"] == "not_attributable"
+        assert rules.KIND_TO_ATTRIBUTION["inline_in_explanation"] == "declared"
         assert rules.KIND_TO_ATTRIBUTION["range_string"] == "not_attributable"
         assert rules.KIND_TO_ATTRIBUTION["absent"] == "not_attributable"
 
@@ -32,13 +38,24 @@ class TestKindToAttribution:
         assert attribution == "not_attributable"
         assert "forbids inventing" in reason
 
-    def test_inline_in_explanation_not_attributable(self):
+    def test_inline_in_explanation_declared_with_value(self):
+        """G-05 语义修正：解析区答案可声明归属（transport=declared）。"""
         unit = {
             "unit_id": "Q3",
             "answer_evidence": {"type": "inline_in_explanation", "value": "A"},
         }
         attribution, _ = rules.resolve_attribution(unit, "任意卷/Q3")
+        assert attribution == "declared"
+
+    def test_inline_in_explanation_without_value_not_attributable(self):
+        """无 declared value 仍不得声明归属（Strict 不得编造答案值）。"""
+        unit = {
+            "unit_id": "Q10",
+            "answer_evidence": {"type": "inline_in_explanation", "value": None},
+        }
+        attribution, reason = rules.resolve_attribution(unit, "任意卷/Q10")
         assert attribution == "not_attributable"
+        assert "forbids inventing" in reason
 
     def test_unknown_kind_fail_closed(self):
         unit = {"unit_id": "QX", "answer_evidence": {"type": "something_new", "value": "A"}}

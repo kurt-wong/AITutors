@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aitutor.example/schemas/question-core/contracts/v1",
-  "title": "AITutor Question Core contract v1.0.0",
-  "x-contract-version": "1.0.0",
+  "title": "AITutor Question Core contract v1.1.0",
+  "x-contract-version": "1.1.0",
   "properties": {
     "PreprocessingCandidate": {
       "additionalProperties": false,
@@ -91,6 +91,33 @@
     }
   },
   "$defs": {
+    "AnswerAssetRef": {
+      "additionalProperties": false,
+      "description": "Reference to one image asset taking part in an answer.",
+      "properties": {
+        "asset_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "role": {
+          "default": "answer_value",
+          "enum": [
+            "answer_value",
+            "answer_evidence",
+            "illustration"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset_id"
+      ],
+      "title": "AnswerAssetRef",
+      "type": "object"
+    },
     "AnswerCompleteness": {
       "enum": [
         "full",
@@ -113,6 +140,113 @@
       "title": "AnswerEvidenceKind",
       "type": "string"
     },
+    "AnswerStatement": {
+      "additionalProperties": false,
+      "description": "One source-anchored answer statement (the Answer Item carrier).\n\n``value_text`` is what the source actually wrote (verbatim) or a\nlabelled derivation (``compressed``/``combined``/``descriptive``);\n``form`` makes the difference explicit.  Conflict versions each get\ntheir own statement so no source wording is lost or adjudicated.",
+      "properties": {
+        "statement_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Statement Id",
+          "type": "string"
+        },
+        "value_text": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Value Text",
+          "type": "string"
+        },
+        "form": {
+          "default": "verbatim",
+          "enum": [
+            "verbatim",
+            "compressed",
+            "combined",
+            "descriptive"
+          ],
+          "title": "Form",
+          "type": "string"
+        },
+        "source_region": {
+          "default": "unknown",
+          "enum": [
+            "answer_area",
+            "answer_table",
+            "explanation_area",
+            "stem_area",
+            "material",
+            "unknown"
+          ],
+          "title": "Source Region",
+          "type": "string"
+        },
+        "sub_label": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sub Label"
+        },
+        "slot_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slot Index"
+        },
+        "evidence_ref": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Ref"
+        },
+        "locators": {
+          "items": {
+            "$ref": "#/$defs/SourceLocator"
+          },
+          "title": "Locators",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "statement_id",
+        "value_text"
+      ],
+      "title": "AnswerStatement",
+      "type": "object"
+    },
     "Asset": {
       "additionalProperties": false,
       "description": "An image, chart, formula-render or other binary/content artifact.\n\n``target_path`` links the asset to the field it illustrates; several\nassets may share a target (multi-figure material) and one asset may be\nreferenced from several targets (shared material).",
@@ -132,6 +266,7 @@
             "diagram",
             "formula_render",
             "table_render",
+            "answer_image",
             "other"
           ],
           "title": "Asset Role",
@@ -259,6 +394,25 @@
         "storage_path"
       ],
       "title": "Asset",
+      "type": "object"
+    },
+    "AssetSlot": {
+      "additionalProperties": false,
+      "description": "One blank slot whose answer value is one or more images.",
+      "properties": {
+        "assets": {
+          "items": {
+            "$ref": "#/$defs/AnswerAssetRef"
+          },
+          "minItems": 1,
+          "title": "Assets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "assets"
+      ],
+      "title": "AssetSlot",
       "type": "object"
     },
     "BBox": {
@@ -496,6 +650,57 @@
           "default": null,
           "title": "Note"
         },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
+        },
         "answer_type": {
           "const": "chemical",
           "default": "chemical",
@@ -622,6 +827,57 @@
           "default": null,
           "title": "Note"
         },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
+        },
         "answer_type": {
           "const": "composite",
           "default": "composite",
@@ -703,6 +959,57 @@
           "default": null,
           "title": "Note"
         },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
+        },
         "answer_type": {
           "const": "composite_sub",
           "default": "composite_sub",
@@ -715,56 +1022,76 @@
           "title": "Sub Label",
           "type": "string"
         },
-        "answer_value": {
-          "discriminator": {
-            "mapping": {
-              "chemical": "#/$defs/ChemicalAnswer",
-              "composite": "#/$defs/CompositeAnswer",
-              "composite_sub": "#/$defs/CompositeSubAnswer",
-              "expression": "#/$defs/ExpressionAnswer",
-              "fill_blank": "#/$defs/FillBlankAnswer",
-              "multi_choice": "#/$defs/MultiChoiceAnswer",
-              "multi_step": "#/$defs/MultiStepAnswer",
-              "numeric": "#/$defs/NumericAnswer",
-              "single_choice": "#/$defs/SingleChoiceAnswer"
-            },
-            "propertyName": "answer_type"
-          },
-          "oneOf": [
+        "sub_body_local_id": {
+          "anyOf": [
             {
-              "$ref": "#/$defs/SingleChoiceAnswer"
+              "maxLength": 100,
+              "type": "string"
             },
             {
-              "$ref": "#/$defs/MultiChoiceAnswer"
-            },
-            {
-              "$ref": "#/$defs/FillBlankAnswer"
-            },
-            {
-              "$ref": "#/$defs/NumericAnswer"
-            },
-            {
-              "$ref": "#/$defs/ExpressionAnswer"
-            },
-            {
-              "$ref": "#/$defs/ChemicalAnswer"
-            },
-            {
-              "$ref": "#/$defs/MultiStepAnswer"
-            },
-            {
-              "$ref": "#/$defs/CompositeAnswer"
-            },
-            {
-              "$ref": "#/$defs/CompositeSubAnswer"
+              "type": "null"
             }
           ],
+          "default": null,
+          "title": "Sub Body Local Id"
+        },
+        "answer_value": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "chemical": "#/$defs/ChemicalAnswer",
+                  "composite": "#/$defs/CompositeAnswer",
+                  "composite_sub": "#/$defs/CompositeSubAnswer",
+                  "expression": "#/$defs/ExpressionAnswer",
+                  "fill_blank": "#/$defs/FillBlankAnswer",
+                  "multi_choice": "#/$defs/MultiChoiceAnswer",
+                  "multi_step": "#/$defs/MultiStepAnswer",
+                  "numeric": "#/$defs/NumericAnswer",
+                  "single_choice": "#/$defs/SingleChoiceAnswer"
+                },
+                "propertyName": "answer_type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SingleChoiceAnswer"
+                },
+                {
+                  "$ref": "#/$defs/MultiChoiceAnswer"
+                },
+                {
+                  "$ref": "#/$defs/FillBlankAnswer"
+                },
+                {
+                  "$ref": "#/$defs/NumericAnswer"
+                },
+                {
+                  "$ref": "#/$defs/ExpressionAnswer"
+                },
+                {
+                  "$ref": "#/$defs/ChemicalAnswer"
+                },
+                {
+                  "$ref": "#/$defs/MultiStepAnswer"
+                },
+                {
+                  "$ref": "#/$defs/CompositeAnswer"
+                },
+                {
+                  "$ref": "#/$defs/CompositeSubAnswer"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "title": "Answer Value"
         }
       },
       "required": [
-        "sub_label",
-        "answer_value"
+        "sub_label"
       ],
       "title": "CompositeSubAnswer",
       "type": "object"
@@ -854,6 +1181,15 @@
           "default": false,
           "title": "Is Critical",
           "type": "boolean"
+        },
+        "conflict_origin": {
+          "default": "pipeline_disagreement",
+          "enum": [
+            "source_internal",
+            "pipeline_disagreement"
+          ],
+          "title": "Conflict Origin",
+          "type": "string"
         },
         "resolution": {
           "$ref": "#/$defs/ConflictResolution",
@@ -971,6 +1307,30 @@
           ],
           "default": null,
           "title": "Normalized Value"
+        },
+        "value_form": {
+          "default": "verbatim",
+          "enum": [
+            "verbatim",
+            "compressed",
+            "combined",
+            "descriptive"
+          ],
+          "title": "Value Form",
+          "type": "string"
+        },
+        "source_region": {
+          "default": "unknown",
+          "enum": [
+            "answer_area",
+            "answer_table",
+            "explanation_area",
+            "stem_area",
+            "material",
+            "unknown"
+          ],
+          "title": "Source Region",
+          "type": "string"
         },
         "evidence_status": {
           "$ref": "#/$defs/EvidenceStatus",
@@ -1108,6 +1468,57 @@
           "default": null,
           "title": "Note"
         },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
+        },
         "answer_type": {
           "const": "expression",
           "default": "expression",
@@ -1196,6 +1607,57 @@
           "default": null,
           "title": "Note"
         },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
+        },
         "answer_type": {
           "const": "fill_blank",
           "default": "fill_blank",
@@ -1204,7 +1666,17 @@
         },
         "answer_value": {
           "items": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/AssetSlot"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "minItems": 1,
           "title": "Answer Value",
@@ -1605,6 +2077,57 @@
           "default": null,
           "title": "Note"
         },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
+        },
         "answer_type": {
           "const": "multi_choice",
           "default": "multi_choice",
@@ -1687,6 +2210,57 @@
           ],
           "default": null,
           "title": "Note"
+        },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
         },
         "answer_type": {
           "const": "multi_step",
@@ -1776,6 +2350,57 @@
           ],
           "default": null,
           "title": "Note"
+        },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
         },
         "answer_type": {
           "const": "numeric",
@@ -2499,6 +3124,57 @@
           "default": null,
           "title": "Note"
         },
+        "attribution": {
+          "default": "attributed",
+          "enum": [
+            "attributed",
+            "partially_attributed",
+            "unattributed",
+            "disputed"
+          ],
+          "title": "Attribution",
+          "type": "string"
+        },
+        "answer_conflict": {
+          "default": "none",
+          "enum": [
+            "none",
+            "source_conflict"
+          ],
+          "title": "Answer Conflict",
+          "type": "string"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "extraction_gap",
+                "source_not_provided",
+                "policy_withheld"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Reason"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/AnswerStatement"
+          },
+          "title": "Statements",
+          "type": "array"
+        },
+        "slot_bindings": {
+          "items": {
+            "$ref": "#/$defs/SlotBinding"
+          },
+          "title": "Slot Bindings",
+          "type": "array"
+        },
         "answer_type": {
           "const": "single_choice",
           "default": "single_choice",
@@ -2516,6 +3192,55 @@
         "answer_value"
       ],
       "title": "SingleChoiceAnswer",
+      "type": "object"
+    },
+    "SlotBinding": {
+      "additionalProperties": false,
+      "description": "Blank identity: binds ``answer_value[i]`` to a printed blank slot.",
+      "properties": {
+        "slot_index": {
+          "minimum": 0,
+          "title": "Slot Index",
+          "type": "integer"
+        },
+        "slot_id": {
+          "maxLength": 50,
+          "minLength": 1,
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "sub_label": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sub Label"
+        },
+        "sub_body_local_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sub Body Local Id"
+        }
+      },
+      "required": [
+        "slot_index",
+        "slot_id"
+      ],
+      "title": "SlotBinding",
       "type": "object"
     },
     "SourceDocumentRef": {

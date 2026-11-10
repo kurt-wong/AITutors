@@ -1,4 +1,4 @@
-﻿"""Counterexample tests: the four blocking invariants (F1–F4) and the five
+"""Counterexample tests: the four blocking invariants (F1–F4) and the five
 non-blocking contract fixes (N1/N5/N7/N8/N9).
 
 Each test constructs the *illegal* shape DSH found and asserts the contract
@@ -269,11 +269,22 @@ class TestF1EvidenceConflictBlocksApproval:
 
 
 class TestF2StrictCompletenessLink:
-    def test_not_attributable_with_complete_candidate_rejected(self):
-        """DSH counterexample: not_attributable answer but candidate claims
-        completeness=complete."""
+    def test_not_attributable_with_attributed_answer_rejected(self):
+        """G-07 attribution axis (Phase 3): a not_attributable declaration
+        must not be paired with answers claiming attribution='attributed'.
+
+        Historical form (contract 1.0.0): any COMPLETE candidate with a
+        not_attributable declaration was rejected outright ("must be marked
+        incomplete").  The coupling is removed; this is the replacement
+        counterexample.
+        """
         from question_core.contracts.v1 import (
+            AnswerCompleteness,
+            CandidateCore,
             Completeness,
+            FillBlankAnswer,
+            IngestionIdentity,
+            InputHashes,
             PreprocessingCandidate,
             PreprocessingSource,
             PreprocessingUnitRef,
@@ -283,20 +294,20 @@ class TestF2StrictCompletenessLink:
 
         with pytest.raises(ValidationError, match="not_attributable"):
             PreprocessingCandidate(
-                core=__import__(
-                    "question_core.contracts.v1", fromlist=["x"]
-                ).CandidateCore(
+                core=CandidateCore(
                     question_type="short_answer",
                     content=_content(),
+                    answers=(
+                        FillBlankAnswer(
+                            answer_value=("x",),
+                            completeness=AnswerCompleteness.FULL,
+                        ),
+                    ),
                     completeness=Completeness.COMPLETE,
-                    ingestion=__import__(
-                        "question_core.contracts.v1", fromlist=["x"]
-                    ).IngestionIdentity(
+                    ingestion=IngestionIdentity(
                         candidate_idempotency_key="k" * 20,
                         adapter_version="a/1",
-                        input_hashes=__import__(
-                            "question_core.contracts.v1", fromlist=["x"]
-                        ).InputHashes(manifest_hash=_HASH_A),
+                        input_hashes=InputHashes(manifest_hash=_HASH_A),
                     ),
                 ),
                 source=PreprocessingSource(
@@ -310,7 +321,102 @@ class TestF2StrictCompletenessLink:
                     answer_declaration=StrictAnswerDeclaration(
                         attribution="not_attributable",
                         evidence_kind="explanation_prose",
-                        completeness="incomplete",
+                        completeness="complete",
+                    ),
+                ),
+            )
+
+    def test_not_attributable_with_disputed_answers_accepted(self):
+        """G-07 orthogonality (Phase 3): not_attributable + answers carrying
+        content with attribution='disputed' is a coherent COMPLETE state —
+        completeness is judged on the content axis."""
+        from question_core.contracts.v1 import (
+            AnswerCompleteness,
+            CandidateCore,
+            Completeness,
+            FillBlankAnswer,
+            IngestionIdentity,
+            InputHashes,
+            PreprocessingCandidate,
+            PreprocessingSource,
+            PreprocessingUnitRef,
+            SourceDocumentRef,
+            StrictAnswerDeclaration,
+        )
+
+        cand = PreprocessingCandidate(
+            core=CandidateCore(
+                question_type="short_answer",
+                content=_content(),
+                answers=(
+                    FillBlankAnswer(
+                        answer_value=("x",),
+                        completeness=AnswerCompleteness.FULL,
+                        attribution="disputed",
+                    ),
+                ),
+                completeness=Completeness.COMPLETE,
+                ingestion=IngestionIdentity(
+                    candidate_idempotency_key="k" * 20,
+                    adapter_version="a/1",
+                    input_hashes=InputHashes(manifest_hash=_HASH_A),
+                ),
+            ),
+            source=PreprocessingSource(
+                source_document_id="doc/1",
+                manifest_ref=SourceDocumentRef(
+                    doc_role="manifest", content_hash=_HASH_A
+                ),
+                unit=PreprocessingUnitRef(
+                    unit_id="Q1", unit_type="standalone_question"
+                ),
+                answer_declaration=StrictAnswerDeclaration(
+                    attribution="not_attributable",
+                    evidence_kind="explanation_prose",
+                    completeness="complete",
+                ),
+            ),
+        )
+        assert cand.core.completeness == Completeness.COMPLETE
+
+    def test_complete_without_answers_rejected(self):
+        """F2 condition 3: non-essay COMPLETE candidates must carry answers."""
+        from question_core.contracts.v1 import (
+            CandidateCore,
+            Completeness,
+            IngestionIdentity,
+            InputHashes,
+            PreprocessingCandidate,
+            PreprocessingSource,
+            PreprocessingUnitRef,
+            SourceDocumentRef,
+            StrictAnswerDeclaration,
+        )
+
+        with pytest.raises(ValidationError, match="at least one"):
+            PreprocessingCandidate(
+                core=CandidateCore(
+                    question_type="short_answer",
+                    content=_content(),
+                    completeness=Completeness.COMPLETE,
+                    ingestion=IngestionIdentity(
+                        candidate_idempotency_key="k" * 20,
+                        adapter_version="a/1",
+                        input_hashes=InputHashes(manifest_hash=_HASH_A),
+                    ),
+                ),
+                source=PreprocessingSource(
+                    source_document_id="doc/1",
+                    manifest_ref=SourceDocumentRef(
+                        doc_role="manifest", content_hash=_HASH_A
+                    ),
+                    unit=PreprocessingUnitRef(
+                        unit_id="Q1", unit_type="standalone_question"
+                    ),
+                    answer_declaration=StrictAnswerDeclaration(
+                        attribution="not_attributable",
+                        evidence_kind="explanation_prose",
+                        completeness="complete",
                     ),
                 ),
             )
