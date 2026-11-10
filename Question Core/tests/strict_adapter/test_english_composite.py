@@ -79,6 +79,7 @@ def ctx() -> MappingContext:
         annotated_md_bytes=76502,
         image_by_line={a["line_no"]: a for a in manifest.get("image_assets", [])},
         paper_id="2019北京高考真题英语（教师版）(1)",
+        subject="英语",
         run_id="qcore-delivery-01c-r3-tests",
     )
 
@@ -544,6 +545,7 @@ class TestRegressionGuard:
                 a["line_no"]: a for a in manifest.get("image_assets", [])
             },
             paper_id="2019江苏高考真题语文（教师版）(1)",
+            subject="语文",
             run_id="qcore-delivery-01c-r3-tests",
         )
 
@@ -621,6 +623,7 @@ class TestRegressionGuard:
             annotated_md_bytes=1,
             image_by_line={a["line_no"]: a for a in manifest.get("image_assets", [])},
             paper_id="2020全国I卷高考真题化学（教师版）(1)",
+            subject="化学",
         )
         assert not is_english_composite(unit, ctx)
         m = chem_map_unit(unit, ctx)

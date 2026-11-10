@@ -61,7 +61,6 @@ from .extract import (
     split_sub_segments,
 )
 from .rules import (
-    SUBJECT_AUTHORITY,
     answer_completeness,
     question_type,
     resolve_attribution,
@@ -92,6 +91,7 @@ class MappingContext:
     annotated_md_bytes: int
     image_by_line: dict = field(default_factory=dict)
     paper_id: str = ""
+    subject: str = ""  # 试卷级显式学科（R1 B2）：缺失即 fail-closed
     run_id: str = ""
     ingestion_run_id: UUID = field(default_factory=new_id)
     log_records: list = field(default_factory=list)
@@ -669,6 +669,13 @@ def _explanation_blocks(unit: dict, ctx: MappingContext, asset_sink: list, log: 
 
 
 def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
+    # R1 B2：学科必须由导入上下文显式提供（不猜测、不默认）
+    if not (ctx.subject or "").strip():
+        raise ValueError(
+            f"{unit.get('unit_id')}: MappingContext.subject missing "
+            "(fail-closed; subject must be provided explicitly by the "
+            "import context, never guessed)"
+        )
     # 英语 composite（grammar_fill/cloze/reading/seven_to_five，且试卷在
     # rules.ENGLISH_COMPOSITE_SCOPE_PAPERS 显式范围内）走专用确定性展开+
     # 答案解码分支（QCORE-DELIVERY-01-C-R3）；其余（含语文同名 reading
@@ -845,10 +852,13 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
             else None,
         ),
         grade=ctx.manifest.get("grade"),
-        subject=SUBJECT_AUTHORITY["value"],
+        subject=ctx.subject,
         answer_declaration=declaration,
     )
-    log["subject_mapping"] = SUBJECT_AUTHORITY
+    log["subject_mapping"] = {
+        "value": ctx.subject,
+        "source": "import_context.paper_level (MappingContext.subject)",
+    }
     log["source_document_id"] = source_document_id
     log["idempotency_key"] = idem_key
     log["identity_fingerprint"] = fingerprint

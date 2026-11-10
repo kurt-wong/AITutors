@@ -275,15 +275,51 @@ class OptionSpec:
     end: int
 
 
+def _split_inline_shared_options(
+    lines: list[str], s: int, e: int, options: list[OptionSpec]
+) -> dict[str, dict] | None:
+    """同文本区域多选项（非 HTML 表格）按印刷标记切分（R1 B1）。
+
+    返回 label -> {"text", "line_start", "line_end"}；标记序列与
+    options 标签顺序不一致或任一标记缺失时返回 None（fail-closed，
+    不产出空选项、不合并选项内容）。
+    """
+    joined = "\n".join(lines[s - 1:e])
+    marks: list[tuple[str, int, int]] = []
+    pos = 0
+    for opt in options:
+        pat = re.compile(r"(?:^|\s)(" + re.escape(opt.label) + r")[.．、]\s*")
+        m = pat.search(joined, pos)
+        if m is None:
+            return None
+        marks.append((opt.label, m.start(1), m.end()))
+        pos = m.end()
+    out: dict[str, dict] = {}
+    for i, (label, _ls_off, start_off) in enumerate(marks):
+        end_off = marks[i + 1][1] if i + 1 < len(marks) else len(joined)
+        raw = joined[start_off:end_off]
+        text = raw.strip()
+        if not text:
+            return None
+        first = start_off + (len(raw) - len(raw.lstrip()))
+        last = first + len(text) - 1
+        line_start = s + joined[:first].count("\n")
+        line_end = s + joined[:last].count("\n")
+        out[label] = {"text": text, "line_start": line_start, "line_end": line_end}
+    return out
+
+
 def extract_options(
     lines: list[str], options: list[OptionSpec]
 ) -> tuple[list[dict], RawTable | None]:
     """按 Manifest 逐选项行区提取。
 
     - 常规：每选项独立行区 → 逐行字面文本。
-    - 共享行区（多个选项同一 [s,e]，且该行区是 HTML 表格）：解析表格，
-      以印刷标签匹配表格行；每选项 blocks = 该行各单元格文本；同时返回
-      完整 RawTable 供父体 stem_blocks 保留整表网格。
+    - 共享行区（多个选项同一 [s,e]）：
+      · HTML 表格：解析表格，以印刷标签匹配表格行；每选项 blocks =
+        该行各单元格文本；同时返回完整 RawTable 供父体 stem_blocks 保留整表网格。
+      · 普通文本（同行/同区多选项）：按印刷标记切分，逐选项赋真实片段
+        与行区间（R1 B1）；切分失败 fail-closed，不产出空选项。
     """
     if not options:
         return [], None
@@ -297,19 +333,41 @@ def extract_options(
         res = extract_range(lines, s, e)
         if res.tables:
             table = res.tables[0]
+        if table is None:
+            # 共享行区但非 HTML 表格：同行多选项文本切分（B1）
+            split = _split_inline_shared_options(lines, s, e, options)
+            if split is None:
+                raise ValueError(
+                    f"shared option region L{s}-L{e}: inline option markers "
+                    f"do not match labels {[o.label for o in options]} "
+                    "(fail-closed; refusing empty/merged option blocks)"
+                )
+            for opt in options:
+                info = split[opt.label]
+                out.append({
+                    "label": opt.label,
+                    "blocks": [{
+                        "kind": "text",
+                        "text": info["text"],
+                        "line_start": info["line_start"],
+                        "line_end": info["line_end"],
+                    }],
+                    "line_start": info["line_start"],
+                    "line_end": info["line_end"],
+                })
+            return out, table
         for opt in options:
             row_cells: list[dict] = []
-            if table is not None:
-                label_norm = opt.label.strip().upper()
-                row_idx = None
-                for cell in table.cells:
-                    if cell["content"].strip().upper().rstrip("．.、") == label_norm:
-                        row_idx = cell["row_index"]
-                        break
-                if row_idx is not None:
-                    row_cells = [
-                        c for c in table.cells if c["row_index"] == row_idx
-                    ]
+            label_norm = opt.label.strip().upper()
+            row_idx = None
+            for cell in table.cells:
+                if cell["content"].strip().upper().rstrip("．.、") == label_norm:
+                    row_idx = cell["row_index"]
+                    break
+            if row_idx is not None:
+                row_cells = [
+                    c for c in table.cells if c["row_index"] == row_idx
+                ]
             if row_cells:
                 blocks = [
                     {

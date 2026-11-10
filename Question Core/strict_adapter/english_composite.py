@@ -406,12 +406,65 @@ def _split_option_markers(inner: str) -> list[tuple[str, str]] | None:
     return out
 
 
+def _split_option_markers_located(
+    parts: list[tuple[str, int]],
+) -> list[tuple[str, str, int, int]] | None:
+    """按印刷标记切选项并保留真实行定位（R1 B3）。
+
+    parts = [(line_text, line_no), …]，行号允许不连续。每选项返回
+    (label, text, line_start, line_end)：同行多选项共享同一行号；
+    跨行选项给真实起止行。标签必须恰好 A-D 各一次，否则 None（fail-closed）。
+    不推算行号、不使用 Unit 级行区代替块级定位。
+    """
+    if not parts:
+        return None
+    joined_parts: list[str] = []
+    spans: list[tuple[int, int, int]] = []  # (start, end_exclusive, line_no)
+    offset = 0
+    for text, ln in parts:
+        if joined_parts:
+            joined_parts.append("\n")
+            offset += 1
+        start = offset
+        joined_parts.append(text)
+        offset += len(text)
+        spans.append((start, offset, ln))
+    joined = "".join(joined_parts)
+
+    def line_at(pos: int) -> int:
+        for s, e, ln in spans:
+            if s <= pos < e:
+                return ln
+        for s, e, ln in reversed(spans):
+            if e <= pos:
+                return ln
+        return spans[0][2]
+
+    marks = [(m.start(), m.end(), m.group(1)) for m in _OPT_MARKER_RE.finditer(joined)]
+    if [lb for _, _, lb in marks] != ["A", "B", "C", "D"]:
+        return None
+    out = []
+    for i, (_s, e, lb) in enumerate(marks):
+        nxt = marks[i + 1][0] if i + 1 < len(marks) else len(joined)
+        raw = joined[e:nxt]
+        text = raw.strip()
+        if not text:
+            return None
+        first = e + (len(raw) - len(raw.lstrip()))
+        last = first + len(text) - 1
+        out.append((lb, text, line_at(first), line_at(last)))
+    return out
+
+
 def parse_cloze_option_rows(
     lines: list[str], start: int, end: int, expected_labels: list[str]
-) -> tuple[dict[str, list[tuple[str, str]]], list[str]]:
-    """完形选项行 `11. A. … B. … C. … D. …`：行号=空格号，每空 A-D 各一。"""
+) -> tuple[dict[str, list[tuple[str, str, int, int]]], list[str]]:
+    """完形选项行 `11. A. … B. … C. … D. …`：行号=空格号，每空 A-D 各一。
+
+    返回 rows[label] = [(opt_label, text, line_start, line_end), …]（R1 B3）。
+    """
     errors: list[str] = []
-    rows: dict[str, list[tuple[str, str]]] = {}
+    rows: dict[str, list[tuple[str, str, int, int]]] = {}
     for ln in range(start, end + 1):
         text = lines[ln - 1]
         if not text.strip() or text.strip() == "---":
@@ -421,7 +474,7 @@ def parse_cloze_option_rows(
             errors.append(f"L{ln}: unmatched option row: {text[:60]!r}")
             continue
         label = str(int(m.group(1)))
-        opts = _split_option_markers(m.group(2))
+        opts = _split_option_markers_located([(m.group(2), ln)])
         if opts is None:
             errors.append(f"L{ln}: option labels not exactly A-D once each")
             continue
@@ -438,10 +491,13 @@ def parse_cloze_option_rows(
 
 def parse_ag_pool(
     lines: list[str], start: int, end: int
-) -> tuple[list[tuple[str, str]], list[str]]:
-    """七选五共享选项池 A-G（父级挂载；不得复制成每子 A-D）。"""
+) -> tuple[list[tuple[str, str, int, int]], list[str]]:
+    """七选五共享选项池 A-G（父级挂载；不得复制成每子 A-D）。
+
+    返回 (label, text, line_start, line_end)（R1 B3：逐选项块级定位）。
+    """
     errors: list[str] = []
-    pool: list[tuple[str, str]] = []
+    pool: list[tuple[str, str, int, int]] = []
     for ln in range(start, end + 1):
         text = lines[ln - 1]
         if not text.strip() or text.strip() == "---":
@@ -450,8 +506,8 @@ def parse_ag_pool(
         if not m:
             errors.append(f"L{ln}: unmatched A-G option line: {text[:60]!r}")
             continue
-        pool.append((m.group(1), m.group(2)))
-    labels = [lb for lb, _ in pool]
+        pool.append((m.group(1), m.group(2), ln, ln))
+    labels = [lb for lb, *_ in pool]
     if labels != sorted(labels) or len(set(labels)) != len(labels) or not labels:
         errors.append(f"A-G pool labels not unique ascending: {labels}")
     return pool, errors
@@ -476,7 +532,7 @@ def parse_reading_stems(
     for i, (ln, label, first) in enumerate(stem_lines):
         nxt_ln = stem_lines[i + 1][0] if i + 1 < len(stem_lines) else end + 1
         stem_parts = [first]
-        opt_parts: list[str] = []
+        opt_parts: list[tuple[str, int]] = []
         in_opts = False
         for cand in range(ln + 1, nxt_ln):
             t = lines[cand - 1]
@@ -485,11 +541,11 @@ def parse_reading_stems(
             if _OPT_MARKER_RE.search(t):
                 in_opts = True
             if in_opts:
-                opt_parts.append(t)
+                opt_parts.append((t, cand))
             else:
                 stem_parts.append(t.strip())
         stem_text = " ".join(stem_parts).strip()
-        opts = _split_option_markers(" ".join(opt_parts)) if opt_parts else None
+        opts = _split_option_markers_located(opt_parts) if opt_parts else None
         if opts is None:
             errors.append(f"reading Q{label}: options not exactly A-D once each")
             continue
@@ -517,7 +573,7 @@ class SubSpec:
     stem_text: str
     stem_line_start: int
     stem_line_end: int
-    options: list[tuple[str, str]]
+    options: list[tuple[str, str, int, int]]  # (label, text, line_start, line_end)
     blank_raw: str | None
 
 
@@ -525,7 +581,7 @@ def expand_blank_subs(
     lines: list[str],
     material_range: tuple[int, int],
     expected_labels: list[str],
-    option_rows: dict[str, list[tuple[str, str]]] | None,
+    option_rows: dict[str, list[tuple[str, str, int, int]]] | None,
 ) -> tuple[list[SubSpec], list[str]]:
     """空格型子题：空格定位 + 句片段题干 +（可选）逐空选项。"""
     found = find_blank_markers(
@@ -748,7 +804,14 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
     )
 
     from . import ADAPTER_VERSION
-    from .rules import SUBJECT_AUTHORITY
+
+    # R1 B2：学科由导入上下文显式提供（不猜测、不默认）
+    if not (ctx.subject or "").strip():
+        raise ValueError(
+            f"{unit.get('unit_id')}: MappingContext.subject missing "
+            "(fail-closed; english_composite requires explicit paper-level "
+            "subject from the import context)"
+        )
 
     unit_id = unit["unit_id"]
     log: dict = {"unit_id": unit_id, "path": "english_composite"}
@@ -805,7 +868,7 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
             "stem_line_end": s.stem_line_end,
             "stem_text_len": len(s.stem_text),
             "blank_raw": s.blank_raw,
-            "option_labels": [lb for lb, _ in s.options],
+            "option_labels": [lb for lb, *_ in s.options],
         }
         for s in subs
     ]
@@ -826,11 +889,11 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
     parent_options = tuple(
         OptionItem(
             label=lb,
-            blocks=(TextBlock(text=txt),),
-            line_start=None,
-            line_end=None,
+            blocks=(TextBlock(text=txt, line_start=ls, line_end=le),),
+            line_start=ls,
+            line_end=le,
         )
-        for lb, txt in ag_pool
+        for lb, txt, ls, le in ag_pool
     )
     parent = QuestionBody(
         local_id=base,
@@ -856,11 +919,11 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         opts = tuple(
             OptionItem(
                 label=lb,
-                blocks=(TextBlock(text=txt),),
-                line_start=None,
-                line_end=None,
+                blocks=(TextBlock(text=txt, line_start=ls, line_end=le),),
+                line_start=ls,
+                line_end=le,
             )
-            for lb, txt in s.options
+            for lb, txt, ls, le in s.options
         )
         bodies.append(
             QuestionBody(
@@ -1048,7 +1111,7 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
             else None,
         ),
         grade=ctx.manifest.get("grade"),
-        subject=SUBJECT_AUTHORITY["value"],
+        subject=ctx.subject,
         answer_declaration=declaration,
     )
 

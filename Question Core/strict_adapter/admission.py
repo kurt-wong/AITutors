@@ -26,6 +26,7 @@ from question_core.contracts.v1 import (
 )
 from question_core.contracts.v1 import candidate_adapter
 
+from .content_audit import enforce_content_audit
 from .mapper import MappingContext, UnitMapping
 
 
@@ -51,6 +52,13 @@ def admit(
 ) -> AdmissionResult:
     unit_id = mapping.unit_id
     log: dict = {"unit_id": unit_id}
+
+    # ---- 0. 内容审计（正式唯一入口，fail-closed）----
+    # 硬性规则 A–E 在准入决策与任何实体构造/持久化之前执行；FAIL 即抛
+    # ContentAuditError（不降级为 warning、不产出可入库的错误 Candidate）。
+    # 历史审计脚本（runs/*/phase3_content_audit.py 等）不得绕过本门禁。
+    audit_result = enforce_content_audit(mapping, ctx)
+    log["content_audit"] = audit_result
 
     # ---- 1. 契约校验（真实 validator，不是模拟）----
     try:

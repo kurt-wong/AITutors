@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from strict_adapter.extract import (  # noqa: E402
@@ -129,3 +131,34 @@ class TestExtractOptions:
         assert table is None
         assert out[0]["blocks"][0]["text"] == "A. 甲"
         assert out[1]["blocks"][0]["text"] == "B. 乙"
+
+    def test_shared_inline_same_line_four_options(self):
+        """R1 B1 反例：同行四选项（含特殊符号）须逐项正确切分+同行定位。"""
+        lines = ["A. ①③②④⑥⑤ B. ①④②③⑥⑤ C. ②①④③⑥⑤ D. ②③④①⑤⑥"]
+        opts = [OptionSpec(label=l, start=1, end=1) for l in ("A", "B", "C", "D")]
+        out, table = extract_options(lines, opts)
+        assert table is None
+        assert [o["label"] for o in out] == ["A", "B", "C", "D"]
+        assert [o["blocks"][0]["text"] for o in out] == [
+            "①③②④⑥⑤", "①④②③⑥⑤", "②①④③⑥⑤", "②③④①⑤⑥",
+        ]
+        for o in out:
+            assert o["blocks"], o["label"]
+            assert o["blocks"][0]["text"].strip(), o["label"]
+            assert o["blocks"][0]["line_start"] == 1
+            assert o["blocks"][0]["line_end"] == 1
+            assert o["line_start"] == 1 and o["line_end"] == 1
+
+    def test_shared_inline_markers_mismatch_fail_closed(self):
+        lines = ["A. 甲 C. 乙"]
+        opts = [OptionSpec(label=l, start=1, end=1) for l in ("A", "B", "C", "D")]
+        with pytest.raises(ValueError, match="inline option markers"):
+            extract_options(lines, opts)
+
+    def test_shared_inline_multi_line_region(self):
+        lines = ["A. 甲 B. 乙", "", "C. 丙 D. 丁"]
+        opts = [OptionSpec(label=l, start=1, end=3) for l in ("A", "B", "C", "D")]
+        out, table = extract_options(lines, opts)
+        assert [o["blocks"][0]["text"] for o in out] == ["甲", "乙", "丙", "丁"]
+        locs = [(o["blocks"][0]["line_start"], o["blocks"][0]["line_end"]) for o in out]
+        assert locs == [(1, 1), (1, 1), (3, 3), (3, 3)]

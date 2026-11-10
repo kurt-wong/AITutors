@@ -12,8 +12,12 @@ QCORE-E2E-01 阶段 C。唯一职责：把本轮已封存的 Preprocessing 产�
   Manifest JSON Pointer 定位（不再以 OCR md 行号冒充 Manifest 行号）；
   ② 答案区图片登记为审核专用 Asset（target_path=/answers）+ ASSET 证据
   （visibility=review_only）；③ 学生端资产清单收紧为可见内容块实际引用集。
+* 0.1.2 — QCORE-DELIVERY-02-R1 阻断修复：① 同行多选项按印刷标记切分
+  （B1，不再产出空选项块）；② subject 改由 MappingContext 试卷级显式
+  传递并 fail-closed（B2，移除 SUBJECT_AUTHORITY 单卷硬编码）；
+  ③ 英语选项块补齐真实行定位（B3，块级 line_start/line_end）。
 """
 
-ADAPTER_VERSION = "strict-adapter/0.1.1"
+ADAPTER_VERSION = "strict-adapter/0.1.2"
 
 __all__ = ["ADAPTER_VERSION"]

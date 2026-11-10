@@ -96,19 +96,12 @@ QUESTION_TYPE_MAP: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# 学科来源（N-1）：Manifest subject=None，权威来源是 01_INPUT/input_manifest.json。
-# Adapter 输入契约显式声明映射，禁止静默猜测或隐式补值。
+# 学科（R1 B2 修复）：不得使用任何单卷硬编码常量。subject 由导入入口按
+# 试卷级配置显式写入 MappingContext.subject，经 standalone 与 composite
+# 两条映射路径传入 Candidate.source.subject；缺失即 fail-closed（mapper
+# 抛错），禁止从文件名/内容/LLM 推断，禁止静默默认（原 SUBJECT_AUTHORITY
+# 单卷硬编码已移除——三卷 manifest.subject=None (N-1) 时曾错误回退"化学"）。
 # ---------------------------------------------------------------------------
-
-SUBJECT_AUTHORITY = {
-    "value": "化学",
-    "source": "01_INPUT/input_manifest.json",
-    "rule": (
-        "explicit mapping: subject is taken from the run input manifest "
-        "(authoritative); manifest.subject=None (N-1) is never guessed from "
-        "path or content"
-    ),
-}
 
 # ---------------------------------------------------------------------------
 # 子问印刷标签切分（Composite 父子结构）
@@ -195,7 +188,6 @@ __all__ = [
     "OWNER_ATTRIBUTION_OVERRIDES",
     "OWNER_OVERRIDE_REASONS",
     "QUESTION_TYPE_MAP",
-    "SUBJECT_AUTHORITY",
     "SUB_LABEL_PATTERN",
     "answer_completeness",
     "question_type",

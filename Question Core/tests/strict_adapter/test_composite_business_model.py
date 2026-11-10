@@ -68,6 +68,7 @@ def ctx() -> MappingContext:
         annotated_md_bytes=76502,
         image_by_line={a["line_no"]: a for a in manifest.get("image_assets", [])},
         paper_id="2019北京高考真题英语（教师版）(1)",
+        subject="英语",
         run_id="qcore-delivery-01c-r4-tests",
     )
 

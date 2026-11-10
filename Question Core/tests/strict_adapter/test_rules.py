@@ -115,6 +115,60 @@ class TestQuestionType:
 
 
 class TestSubjectMapping:
-    def test_explicit_authority(self):
-        assert rules.SUBJECT_AUTHORITY["value"] == "化学"
-        assert "input_manifest" in rules.SUBJECT_AUTHORITY["source"]
+    """R1 B2：学科由 MappingContext 显式传递；无常量、无默认、fail-closed。"""
+
+    def test_no_hardcoded_constant(self):
+        assert not hasattr(rules, "SUBJECT_AUTHORITY")
+
+    def test_subject_comes_from_context(self):
+        from strict_adapter.mapper import MappingContext, map_unit
+
+        unit = {
+            "unit_id": "S1", "unit_type": "standalone_question",
+            "question_numbers": [1], "printed_number": "1",
+            "stem_lines": [1, 1], "original_question_type": "single_choice",
+            "answer_evidence": {"type": "answer_lines", "lines": [2, 2],
+                                "value": "A", "shared": False},
+            "answer_completeness": "full",
+            "options": [],
+        }
+        lines = ["1．题干", "【答案】A", "【解析】略"]
+        for subject in ("化学", "语文", "英语"):
+            ctx = MappingContext(
+                lines=lines, manifest={"units": [unit], "grade": "高三",
+                                       "image_assets": []},
+                manifest_path="m.json", manifest_name="m.json",
+                source_md_path="s.md", source_md_name="s.md",
+                source_pdf_name="p.pdf", annotated_md_name="a.md",
+                manifest_sha="0" * 64, source_md_sha="1" * 64,
+                source_pdf_sha="2" * 64, annotated_md_sha="3" * 64,
+                manifest_bytes=1, source_md_bytes=1, source_pdf_bytes=1,
+                annotated_md_bytes=1, paper_id="paper-x", subject=subject,
+                run_id="r1-test",
+            )
+            m = map_unit(unit, ctx)
+            assert m.candidate.source.subject == subject
+
+    def test_missing_subject_fail_closed(self):
+        from strict_adapter.mapper import MappingContext, map_unit
+
+        unit = {
+            "unit_id": "S1", "unit_type": "standalone_question",
+            "question_numbers": [1], "printed_number": "1",
+            "stem_lines": [1, 1], "original_question_type": "single_choice",
+            "answer_evidence": None, "answer_completeness": "full",
+            "options": [],
+        }
+        ctx = MappingContext(
+            lines=["x"], manifest={"units": [unit]},
+            manifest_path="m.json", manifest_name="m.json",
+            source_md_path="s.md", source_md_name="s.md",
+            source_pdf_name="p.pdf", annotated_md_name="a.md",
+            manifest_sha="0" * 64, source_md_sha="1" * 64,
+            source_pdf_sha="2" * 64, annotated_md_sha="3" * 64,
+            manifest_bytes=1, source_md_bytes=1, source_pdf_bytes=1,
+            annotated_md_bytes=1, paper_id="paper-x",  # 无 subject
+            run_id="r1-test",
+        )
+        with pytest.raises(ValueError, match="subject"):
+            map_unit(unit, ctx)
