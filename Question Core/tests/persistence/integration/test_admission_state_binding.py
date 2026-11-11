@@ -114,10 +114,14 @@ class TestAdmissionStateBindingInDb:
         assert agg.state_history[0].approval is None
         assert agg.state_history[0].publication_record is None
 
+    @pytest.mark.parametrize("unit_id", ["Q8", "Q10"])
     def test_incomplete_question_persists_not_ready_unpublished(
-        self, engine, clean_db, chem_ctx, chem_mappings
+        self, engine, clean_db, chem_ctx, chem_mappings, unit_id
     ):
-        mapping = chem_mappings["Q3"]
+        # Q8 = declared 但 completeness=unknown；Q10 = P-1 归属冻结 + unknown。
+        # （原 Q3 用例已按 G-05/Phase 3 移至 test_q3_inline_answer_restored_persists：
+        #  inline_in_explanation 不再导致 not_attributable/缺答案。）
+        mapping = chem_mappings[unit_id]
         assert mapping.completeness == "incomplete"
         res = admit(mapping, chem_ctx, ordinal=1)
         assert res.validated and res.admitted
@@ -132,6 +136,38 @@ class TestAdmissionStateBindingInDb:
         assert rev.state.publication == PublicationState.UNPUBLISHED
         assert rev.state.approval is None
         assert rev.state.publication_record is None
+        assert agg.published_revision() is None
+        assert len(agg.state_history) == 1
+
+    def test_q3_inline_answer_restored_persists_pending_review_unpublished(
+        self, engine, clean_db, chem_ctx, chem_mappings
+    ):
+        """Phase 3 G-05 回归（集成持久化版）：化学 Q3（inline_in_explanation）
+        恢复 TypedAnswer，completeness=complete → pending_review + unpublished
+        持久化并回读一致；不自动批准、不自动发布。"""
+        mapping = chem_mappings["Q3"]
+        assert mapping.completeness == "complete"
+        assert len(mapping.candidate.core.answers) == 1
+        ans = mapping.candidate.core.answers[0]
+        assert ans.answer_type == "single_choice"
+        assert ans.answer_value == "A"
+        assert ans.evidence_kind.value == "inline_in_explanation"
+        assert ans.attribution == "attributed"
+        res = admit(mapping, chem_ctx, ordinal=1)
+        assert res.validated and res.admitted
+        assert res.review_state == "pending_review"
+        assert res.publication_state == "unpublished"
+
+        agg = _persist_and_readback(engine, mapping, res)
+
+        rev = agg.revisions[0]
+        assert rev.state.completeness == Completeness.COMPLETE
+        assert rev.state.review == ReviewState.PENDING_REVIEW
+        assert rev.state.publication == PublicationState.UNPUBLISHED
+        assert rev.state.approval is None
+        assert rev.state.publication_record is None
+        assert rev.created_by == chem_ctx.run_id
+        assert rev.content_hash == res.content_hash
         assert agg.published_revision() is None
         assert len(agg.state_history) == 1
 
