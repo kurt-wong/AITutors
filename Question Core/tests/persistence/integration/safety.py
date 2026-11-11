@@ -16,8 +16,12 @@ from sqlalchemy.engine import make_url
 #: Host ports of the new AITutor-postgresql instance (Infrastructure README).
 EXPECTED_PORT = 55432
 EXPECTED_USER = "qcore_app"
-#: Databases pre-created on the new instance by Infrastructure/initdb.
-ALLOWED_DATABASES = {"qcore_dev_test", "qcore_dev_test_migrate"}
+#: Databases dedicated to QCORE-ANSWER-FIDELITY-04 integration tests
+#: (created empty and owned by qcore_app; exact-name allowlist only).
+ALLOWED_DATABASES = {
+    "qcore_answer_fidelity_03_pgtest",
+    "qcore_answer_fidelity_03_pgtest_migrate",
+}
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 #: Synchronous drivers only (matches question_core.persistence.config).
 ALLOWED_DRIVERS = frozenset({"postgresql", "postgresql+psycopg2"})

@@ -99,7 +99,7 @@ def target_evidence():
     """Safety verification of the main test target (runs before any DDL)."""
     try:
         return verify_test_target(
-            TEST_DATABASE_URL, expected_database="qcore_dev_test"
+            TEST_DATABASE_URL, expected_database="qcore_answer_fidelity_03_pgtest"
         )
     except UnsafeTestTarget as exc:
         pytest.fail(f"test connection safety check failed: {exc}")
@@ -120,7 +120,7 @@ def engine(target_evidence):
     eng = create_db_engine(settings)
     report = health_check(eng)
     assert report["status"] == "ok"
-    assert report["database"] == "qcore_dev_test"
+    assert report["database"] == "qcore_answer_fidelity_03_pgtest"
     yield eng
     eng.dispose()
 

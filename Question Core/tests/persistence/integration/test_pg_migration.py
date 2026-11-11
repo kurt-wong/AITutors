@@ -42,7 +42,7 @@ def migration_target():
     """Validated migration-test connection (pre-created database)."""
     url = migration_database_url()
     evidence = verify_test_target(
-        url, expected_database="qcore_dev_test_migrate"
+        url, expected_database="qcore_answer_fidelity_03_pgtest_migrate"
     )
     return url, evidence
 
@@ -118,7 +118,7 @@ class TestMigrationLifecycle:
         # R1-FIX-2: state history append-only trigger exists exactly once
         assert state_triggers == 1
         # the migration database is the pre-created dedicated one
-        assert evidence["database"] == "qcore_dev_test_migrate"
+        assert evidence["database"] == "qcore_answer_fidelity_03_pgtest_migrate"
 
     def test_repeated_upgrade_preserves_data(self, empty_migration_db):
         url, _ = empty_migration_db
