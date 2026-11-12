@@ -411,7 +411,10 @@ class TestFidelityCounterexamples:
 
         from question_core.contracts.v1 import FillBlankAnswer
 
-        with pytest.raises(ValidationError, match="source_conflict"):
+        # QCORE-MISSING-ANSWER-SLOT-01：非 disputed 的 None 空位须走 missing
+        # 声明（completeness!=full + missing_reason + attribution!=attributed）；
+        # 裸 None 仍被拒绝，仅拒绝原因消息由 source_conflict 改为 missing 三条件。
+        with pytest.raises(ValidationError, match="None blank \\(non-disputed\\)"):
             FillBlankAnswer(answer_value=("a", None))
 
     def test_none_slot_without_version_statements_rejected(self):

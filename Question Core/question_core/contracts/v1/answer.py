@@ -191,21 +191,35 @@ class FillBlankAnswer(AnswerBase):
         none_idx = [i for i, v in enumerate(self.answer_value) if v is None]
         if not none_idx:
             return self
-        # D1 (Owner-confirmed): a None blank is legal only for a disputed
-        # blank whose statements hold every conflict version.
-        if self.answer_conflict != "source_conflict":
+        if self.answer_conflict == "source_conflict":
+            # D1 (Owner-confirmed): a disputed blank's statements hold every
+            # conflict version — the adapter never silently picks one side.
+            for i in none_idx:
+                versions = [s for s in self.statements if s.slot_index == i]
+                if len(versions) < 2:
+                    raise ValueError(
+                        f"disputed blank at slot_index={i} requires at least two "
+                        "conflict-version statements for that slot (the statements "
+                        "must hold every source version)"
+                    )
+            return self
+        # QCORE-MISSING-ANSWER-SLOT-01: a missing blank = the slot exists but
+        # no source-verified value can be bound (not a dispute).
+        if self.completeness == AnswerCompleteness.FULL:
             raise ValueError(
-                "None blank is only legal when answer_conflict='source_conflict' "
-                "(disputed blank; never silently pick one side)"
+                "None blank (non-disputed) requires completeness != 'full' "
+                "(missing blank is a fact, not a complete answer)"
             )
-        for i in none_idx:
-            versions = [s for s in self.statements if s.slot_index == i]
-            if len(versions) < 2:
-                raise ValueError(
-                    f"disputed blank at slot_index={i} requires at least two "
-                    "conflict-version statements for that slot (the statements "
-                    "must hold every source version)"
-                )
+        if self.missing_reason is None:
+            raise ValueError(
+                "None blank (non-disputed) requires missing_reason "
+                "(extraction_gap / source_not_provided / policy_withheld)"
+            )
+        if self.attribution == "attributed":
+            raise ValueError(
+                "None blank (non-disputed) requires attribution != 'attributed' "
+                "(missing must not pose as a silently skipped mapping)"
+            )
         return self
 
 
@@ -288,26 +302,27 @@ class CompositeSubAnswer(AnswerBase):
             none_idx = [
                 i for i, v in enumerate(inner.answer_value) if v is None
             ]
-            if none_idx and self.answer_conflict != "source_conflict" and (
-                inner.answer_conflict != "source_conflict"
-            ):
-                raise ValueError(
-                    "disputed None blank inside a composite_sub requires "
-                    "answer_conflict='source_conflict' on the sub-answer or "
-                    "the fill-blank answer"
+            if none_idx:
+                disputed = (
+                    self.answer_conflict == "source_conflict"
+                    or inner.answer_conflict == "source_conflict"
                 )
-            for i in none_idx:
-                versions = [
-                    s
-                    for s in tuple(self.statements) + tuple(inner.statements)
-                    if s.slot_index == i
-                ]
-                if len(versions) < 2:
-                    raise ValueError(
-                        f"disputed blank at slot_index={i} requires at least "
-                        "two conflict-version statements (on the sub-answer "
-                        "or the fill-blank answer) for that slot"
-                    )
+                if disputed:
+                    for i in none_idx:
+                        versions = [
+                            s
+                            for s in tuple(self.statements) + tuple(inner.statements)
+                            if s.slot_index == i
+                        ]
+                        if len(versions) < 2:
+                            raise ValueError(
+                                f"disputed blank at slot_index={i} requires at least "
+                                "two conflict-version statements (on the sub-answer "
+                                "or the fill-blank answer) for that slot"
+                            )
+                # 非 disputed 的 None 空位 = missing（QCORE-MISSING-ANSWER-SLOT-01）：
+                # inner 的 _slot_values_valid 已强制 completeness != full +
+                # missing_reason + attribution != attributed，此处不再重复拒绝。
         return self
 
 

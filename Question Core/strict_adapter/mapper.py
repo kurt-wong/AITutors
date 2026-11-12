@@ -403,8 +403,34 @@ def _build_sub_inner(
     notes = []
     if override_reason:
         notes.append(f"owner override (attribution frozen): {override_reason}")
-    # 单值多选（题型明确）
-    if qtype in ("multi_choice", "multiple_choice") and len(sub_items) == 1:
+    # QCORE-MISSING-ANSWER-SLOT-01：missing 槽位传递——
+    # ① 虚构值守卫：status=missing 条目不得携带 value_text（拒绝静默接受）；
+    # ② missing_reason 传递（Contract 非 disputed None 槽的必要条件）；
+    # ③ completeness 降档（missing 与 full 矛盾，_missing_reason_axis 亦拒绝）。
+    missing_items = []
+    for i in sub_items:
+        if i.get("status") == "missing" and i.get("value_text") is not None:
+            raise ValueError(
+                "missing 答案条目不得携带 value_text（虚构答案值不得静默接受）"
+            )
+        if (i.get("value_text") is None and not i.get("asset_ref")
+                and i.get("status") == "missing"):
+            missing_items.append(i)
+    missing_reason = None
+    if missing_items:
+        mr = missing_items[0].get("missing_reason")
+        missing_reason = (
+            mr if mr in ("extraction_gap", "source_not_provided", "policy_withheld")
+            else "extraction_gap"
+        )
+        comp_enum = (
+            AnswerCompleteness.ABSENT
+            if len(missing_items) == len(sub_items)
+            else AnswerCompleteness.PARTIAL
+        )
+    # 单值多选（题型明确；空值/missing 不进此分支，落 fill_blank）
+    if (qtype in ("multi_choice", "multiple_choice") and len(sub_items) == 1
+            and (sub_items[0].get("value_text") or "").strip()):
         raw = (sub_items[0].get("value_text") or "").strip()
         labels = tuple(
             ch for ch in raw.upper() if "A" <= ch <= "H"
@@ -421,12 +447,12 @@ def _build_sub_inner(
             note="; ".join(notes) or None,
         )
         return ans
-    # 单值单选（值形 = 单个 A–H 标签）
+    # 单值单选（值形 = 单个 A–H 标签；空值/missing 不进此分支，落 fill_blank）
     if len(sub_items) == 1:
         raw = (sub_items[0].get("value_text") or "").strip()
-        if qtype == "single_choice" or (
+        if raw and (qtype == "single_choice" or (
             len(raw) == 1 and "A" <= raw.upper() <= "H"
-        ):
+        )):
             ans = SingleChoiceAnswer(
                 answer_value=raw.upper() if len(raw) == 1 else raw,
                 answer_display=raw,
@@ -459,9 +485,13 @@ def _build_sub_inner(
         attribution=attribution,
         answer_conflict=(
             "source_conflict"
-            if any(v is None for v in values)
+            # QCORE-MISSING-ANSWER-SLOT-01：仅非 missing 的无值槽触发争议语义；
+            # missing 槽位保持 answer_conflict=none（缺失≠争议）。
+            if any(v is None and sub_items[idx].get("status") != "missing"
+                   for idx, v in enumerate(values))
             else "none"
         ),
+        missing_reason=missing_reason,
         statements=fb_statements,
         slot_bindings=tuple(slot_bindings),
         note="; ".join(notes) or None,
@@ -678,8 +708,20 @@ def _build_answers(
             return "disputed"
         if any((i.get("status") == "disputed") for i in sub_items):
             return "disputed"
-        if any(i.get("value_text") is None and not i.get("asset_ref") for i in sub_items):
+        if any(
+            i.get("value_text") is None and not i.get("asset_ref")
+            and i.get("status") != "missing"
+            for i in sub_items
+        ):
             return "disputed"
+        # QCORE-MISSING-ANSWER-SLOT-01：status=missing 的无值槽位不是争议，
+        # 落 partially_attributed（"存在未定槽位"硬信号）。
+        if any(
+            i.get("value_text") is None and not i.get("asset_ref")
+            and i.get("status") == "missing"
+            for i in sub_items
+        ):
+            return "partially_attributed"
         if attribution == "not_attributable":
             return "partially_attributed"
         return "attributed"

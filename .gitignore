@@ -8,6 +8,7 @@
 # --- Entirely excluded projects ---
 ARCHIVE/
 _dsh_review/
+_dsh/
 
 # --- Python ---
 __pycache__/
