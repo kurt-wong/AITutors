@@ -1454,6 +1454,12 @@ def _composite_bodies_and_materials(
 ):
     unit_id = unit["unit_id"]
     base = unit_id.lower()
+    if unit.get("extra_image_blocks"):
+        # 本能力仅支持 standalone 题面定点注入；composite 形态 fail closed，
+        # 不静默忽略声明（QCORE-STUDENT-FIDELITY-IMAGE-REPAIR-01）。
+        raise ValueError(
+            f"extra_image_blocks not supported on composite units (unit {unit_id!r})"
+        )
     qrange = unit.get("questions_lines")
     mrange = unit.get("material_lines")
     if not qrange:
@@ -1535,6 +1541,78 @@ def _composite_bodies_and_materials(
     return bodies, materials
 
 
+def _apply_extra_image_blocks(raw_blocks: list, specs: list, unit_id: str) -> list:
+    """受控题面图片注入（QCORE-STUDENT-FIDELITY-IMAGE-REPAIR-01）。
+
+    仅对 unit.extra_image_blocks 显式声明生效：按声明顺序在文本流 offset 处
+    切分文本并插入 ImageBlock(asset_id)。文字字节保持不变；line_start/line_end
+    沿用被切分文本块的原区间。offset 以「该 unit 题面 text 块的拼接文本」为
+    坐标系（单块时即块内 offset）。未声明（specs 为空）时原样返回；anchor 非
+    "text"、offset 越界/非整数、asset_id 缺失时 fail closed，不作任何猜测。
+    """
+    if not specs:
+        return raw_blocks
+    ordered = sorted(
+        enumerate(specs),
+        key=lambda t: (t[1].get("offset") if isinstance(t[1].get("offset"), int) and not isinstance(t[1].get("offset"), bool) else -1, t[0]),
+    )
+    total = sum(len(b.get("text", "")) for b in raw_blocks if b.get("kind") == "text")
+    for _, spec in ordered:
+        if spec.get("anchor") != "text":
+            raise ValueError(
+                f"extra_image_blocks: unsupported anchor {spec.get('anchor')!r} (unit {unit_id!r})"
+            )
+        off = spec.get("offset")
+        if not isinstance(off, int) or isinstance(off, bool) or off < 0 or off > total:
+            raise ValueError(
+                f"extra_image_blocks: offset {off!r} out of [0,{total}] (unit {unit_id!r})"
+            )
+        if not spec.get("asset_id"):
+            raise ValueError(f"extra_image_blocks: asset_id required (unit {unit_id!r})")
+    out = []
+    cursor = 0
+    spec_iter = iter(ordered)
+    pending = next(spec_iter, None)
+    for b in raw_blocks:
+        if b.get("kind") != "text":
+            out.append(b)
+            continue
+        text = b.get("text", "")
+        start = cursor
+        end = cursor + len(text)
+        pos = start
+        while pending is not None:
+            _, spec = pending
+            off = spec["offset"]
+            if off < pos:
+                raise ValueError(
+                    f"extra_image_blocks: offset {off} already passed (unit {unit_id!r})"
+                )
+            if off > end:
+                break
+            if off > pos:
+                out.append({**b, "text": text[pos - start:off - start]})
+            out.append(
+                {
+                    "kind": "image",
+                    "asset_id": spec["asset_id"],
+                    "alt_text": spec.get("alt_text"),
+                    "line_start": b.get("line_start"),
+                    "line_end": b.get("line_end"),
+                }
+            )
+            pos = off
+            pending = next(spec_iter, None)
+        if end > pos:
+            out.append({**b, "text": text[pos - start:]})
+        elif start == end:
+            out.append(b)
+        cursor = end
+    if pending is not None:
+        raise ValueError(f"extra_image_blocks: unresolved spec (unit {unit_id!r})")
+    return out
+
+
 def _standalone_body(
     unit: dict, ctx: MappingContext, asset_sink: list, log: dict
 ):
@@ -1544,7 +1622,10 @@ def _standalone_body(
     table = None
     if stem:
         r = extract_range(ctx.lines, stem[0], stem[1])
-        parent_blocks = _blocks_from_raw(r.blocks, asset_sink, ctx, base)
+        raw = _apply_extra_image_blocks(
+            r.blocks, unit.get("extra_image_blocks") or [], unit.get("unit_id")
+        )
+        parent_blocks = _blocks_from_raw(raw, asset_sink, ctx, base)
 
     opt_specs = [
         {"label": o["label"], "start": o["start_line"], "end": o["end_line"]}
