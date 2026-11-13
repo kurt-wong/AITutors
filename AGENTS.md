@@ -158,7 +158,7 @@ Manifest 必须能区分：
 - 工作副本 `Ocr-markdown/<年级>/<学科>/` 只有 `.md` + `_imgs/`；JSONL 未纳入正式 Run 产物。
 - 化学四组数字属**四个不同层**，不可当同一分母：MD 图片引用 43 / OCR image block 41 / 磁盘 jpg 41 / manifest `image_assets` 45。
 - `image_assets` 是 manifest **顶层扁平表**（chem 45 / chn 2 / eng 6）；图片归属由 entry 的 `line_no` 落到 unit 行区间推定，unit 不持有该字段。
-- 化学 Q12 有 5 条 asset_ref 在整棵 Preprocessing 树中无文件、在本次 OCR JSONL 中无源元素，manifest 却标 `resolved: true`；**根因待查，取证前禁止归因 LLM 或 OCR**。其中 3 条位于 materials（发布后即学生可见），当前 revision 为 `incomplete/not_ready/unpublished`。
+- 化学 Q12 有 5 条 asset_ref 在当次 OCR 产物中无对应块/文件（经 `package_image_assets` 从封存 MD 混入更早 OCR Run 的图）；**文件实际存在于旧 run 封存 workspace（`Question Core/runs/qcore_s2q_repair_01(_r1)/…/imgs/`，sha256 与 manifest 一致），缺的是当前服务根的副本；`resolved: true` 非假阳性，是"生成时有效、当前不可达"（两个根）**。机制根因=双轨不同源+图源不绑 Run（2026-11-13 Final Review 更正，替换原"Preprocessing 全树无文件"表述）。其中 3 条位于 materials（发布后即学生可见、服务根 404），当前 revision 为 `incomplete/not_ready/unpublished`。
 - `qcore_asset_refs` 106 行 = 53 distinct asset × 2（candidate/revision 双绑定）。
 - MD 双轨：导入读 R1 封存副本（`scripts_import.py:119`），manifest 生成读 `Ocr-markdown` 工作副本；两轨人工同步、无自动校验。
 - `extra_image_blocks` 无代码重建器（声明仅存于 gitignored `runs/`，靠 P0 记录的 SHA256 补偿）。
