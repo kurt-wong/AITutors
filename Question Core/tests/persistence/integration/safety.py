@@ -18,9 +18,13 @@ EXPECTED_PORT = 55432
 EXPECTED_USER = "qcore_app"
 #: Databases dedicated to QCORE-ANSWER-FIDELITY-04 integration tests
 #: (created empty and owned by qcore_app; exact-name allowlist only).
+#: qcore_ge01_test: dedicated test DB for the generic execution entry
+#: (QCORE-GENERIC-EXECUTION-CHAIN-01); name outside all forbidden prefixes
+#: so the entry's own DB guard stays fully enabled in its tests.
 ALLOWED_DATABASES = {
     "qcore_answer_fidelity_03_pgtest",
     "qcore_answer_fidelity_03_pgtest_migrate",
+    "qcore_ge01_test",
 }
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 #: Synchronous drivers only (matches question_core.persistence.config).

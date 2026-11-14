@@ -11,6 +11,7 @@ tests/persistence/integration/test_generic_executor_pg.py.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -41,7 +42,8 @@ CHEM_PDF = (
     _QCORE_ROOT.parent / "Preprocessing" / "maintainess" / "PDF" / "2020全国I卷高考真题化学（教师版）(1).pdf"
 )
 R1_WS = _QCORE_ROOT.parent / "Question Core" / "runs" / "qcore_s2q_repair_01_r1" / "workspace"
-# chn sealed inputs (T117 manifest + R1 md)
+# chn bound pair: T117 manifest ↔ answer_fidelity MD (source_content_sha256=0f130df0…)
+AF2 = _QCORE_ROOT.parent / "Preprocessing" / "runs" / "qcore_answer_fidelity_02"
 CHN_MANIFEST = (
     _QCORE_ROOT.parent
     / "Question Core"
@@ -51,9 +53,22 @@ CHN_MANIFEST = (
     / "chinese"
     / "2019江苏高考真题语文（教师版）(1).manifest.json"
 )
-CHN_MD = R1_WS / "chinese" / "ocr_output" / "高三" / "语文" / "2019江苏高考真题语文（教师版）(1).md"
+CHN_MD = AF2 / "chinese" / "ocr_output" / "高三" / "语文" / "2019江苏高考真题语文（教师版）(1).md"
 CHN_PDF = (
     _QCORE_ROOT.parent / "Preprocessing" / "maintainess" / "PDF" / "2019江苏高考真题语文（教师版）(1).pdf"
+)
+# eng bound pair: ISS-01 repair manifest ↔ answer_fidelity MD (c2a31c8c…)
+ENG_MANIFEST = (
+    _QCORE_ROOT.parent
+    / "runs"
+    / "qcore_source_asset_audit_01"
+    / "repair_inputs"
+    / "english"
+    / "2019北京高考真题英语（教师版）(1).manifest.json"
+)
+ENG_MD = AF2 / "english" / "ocr_output" / "高三" / "英语" / "2019北京高考真题英语（教师版）(1).md"
+ENG_PDF = (
+    _QCORE_ROOT.parent / "Preprocessing" / "maintainess" / "PDF" / "2019北京高考真题英语（教师版）(1).pdf"
 )
 
 SEALED_CHEM = pytest.mark.skipif(
@@ -63,6 +78,10 @@ SEALED_CHEM = pytest.mark.skipif(
 SEALED_CHN = pytest.mark.skipif(
     not (CHN_MANIFEST.is_file() and CHN_MD.is_file() and CHN_PDF.is_file()),
     reason="sealed chn artifacts not found",
+)
+SEALED_ENG = pytest.mark.skipif(
+    not (ENG_MANIFEST.is_file() and ENG_MD.is_file() and ENG_PDF.is_file()),
+    reason="sealed eng artifacts not found",
 )
 
 
@@ -311,3 +330,171 @@ class TestStaticProperties:
     def test_no_temporary_runs_dependency(self):
         src = self._source()
         assert "runs/" not in src and "runs\\" not in src
+
+
+class TestManifestSourceBinding:
+    """DSH F-1: manifest↔source hash binding, fail-closed."""
+
+    def _bound_paper(self, tmp_path: Path, md_text: str | None = None) -> tuple[PaperInput, Path]:
+        md = tmp_path / "src.md"
+        md.write_text(md_text if md_text is not None else "L1\nL2\n", encoding="utf-8")
+        import hashlib
+
+        md_sha = hashlib.sha256(md.read_bytes()).hexdigest()
+        man = tmp_path / "m.manifest.json"
+        man.write_text(
+            json.dumps(
+                {
+                    "units": [],
+                    "image_assets": [],
+                    "source_file": "src.md",
+                    "source_content_sha256": md_sha,
+                }
+            ),
+            encoding="utf-8",
+        )
+        pdf = tmp_path / "p.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+        return (
+            PaperInput(
+                paper_id="绑定测试卷", subject="化学", manifest_path=man,
+                source_md_path=md, source_pdf_path=pdf, annotated_md_path=None,
+            ),
+            md,
+        )
+
+    def test_matching_binding_accepted(self, tmp_path):
+        paper, _ = self._bound_paper(tmp_path)
+        ctx, meta = build_context(paper, "t")
+        assert meta["manifest_source_binding"]["source_content_sha256_match"] is True
+        assert meta["manifest_source_binding"]["source_file_basename_match"] is True
+
+    def test_tampered_md_one_byte_rejected(self, tmp_path):
+        paper, md = self._bound_paper(tmp_path, md_text="L1\nL2\n")
+        md.write_text("L1\nL3\n", encoding="utf-8")  # 一字节篡改
+        with pytest.raises(InputContractError, match="source_content_sha256 mismatch"):
+            build_context(paper, "t")
+
+    def test_source_file_pointing_elsewhere_rejected(self, tmp_path):
+        paper, _ = self._bound_paper(tmp_path)
+        man = json.loads(paper.manifest_path.read_text(encoding="utf-8"))
+        man["source_file"] = "other_paper.md"
+        paper.manifest_path.write_text(json.dumps(man), encoding="utf-8")
+        with pytest.raises(InputContractError, match="source_file"):
+            build_context(paper, "t")
+
+    def test_original_sha256_mismatch_rejected(self, tmp_path):
+        paper, _ = self._bound_paper(tmp_path)
+        man = json.loads(paper.manifest_path.read_text(encoding="utf-8"))
+        man["original_sha256"] = "0" * 64
+        paper.manifest_path.write_text(json.dumps(man), encoding="utf-8")
+        with pytest.raises(InputContractError, match="original_sha256 mismatch"):
+            build_context(paper, "t")
+
+    def test_field_absent_is_skipped_not_rejected(self, tmp_path):
+        md = tmp_path / "src.md"
+        md.write_text("x\n", encoding="utf-8")
+        man = tmp_path / "m.manifest.json"
+        man.write_text(json.dumps({"units": [], "image_assets": []}), encoding="utf-8")
+        pdf = tmp_path / "p.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+        paper = PaperInput(
+            paper_id="无绑定字段卷", subject="化学", manifest_path=man,
+            source_md_path=md, source_pdf_path=pdf, annotated_md_path=None,
+        )
+        _, meta = build_context(paper, "t")
+        assert meta["manifest_source_binding"]["source_content_sha256_match"] == "field_absent_skipped"
+
+    @SEALED_CHEM
+    def test_mismatched_md_marks_paper_failed_without_stopping_others(self, tmp_path):
+        # F-1 端到端：坏绑定卷 paper_input_failed 且不落库；好卷不受影响
+        tampered = tmp_path / "tampered.md"
+        tampered.write_bytes(CHEM_MD.read_bytes() + b"\n# tampered\n")
+        papers = [
+            PaperInput(
+                paper_id="坏绑定卷", subject="化学", manifest_path=CHEM_MANIFEST,
+                source_md_path=tampered, source_pdf_path=CHEM_PDF, annotated_md_path=None,
+            ),
+            PaperInput(
+                paper_id="2020全国I卷高考真题化学（教师版）(1)", subject="化学",
+                manifest_path=CHEM_MANIFEST, source_md_path=CHEM_MD,
+                source_pdf_path=CHEM_PDF, annotated_md_path=None,
+            ),
+        ]
+        s = run_papers(papers, "qcore_ge01_dryrun", tmp_path / "out", "t-bind", dry_run=True)
+        bad = next(p for p in s["papers"] if p["paper_id"] == "坏绑定卷")
+        good = next(p for p in s["papers"] if p["paper_id"].startswith("2020"))
+        assert bad["status"] == "paper_input_failed" and "mismatch" in bad["error"]
+        assert good["mapped_count"] > 0
+
+
+class TestUrlOverrideAndCli:
+    def test_stale_env_url_is_overridden_and_recorded(self, monkeypatch):
+        from strict_adapter.generic_executor import apply_target_db_url
+
+        monkeypatch.setenv(
+            "QCORE_DATABASE_URL",
+            "postgresql+psycopg2://user:pw@127.0.0.1:55432/qcore_dev_test",
+        )
+        record = apply_target_db_url("qcore_ge01_dryrun")
+        assert record["preexisting_dbname"] == "qcore_dev_test"
+        assert record["applied_target_dbname"] == "qcore_ge01_dryrun"
+        assert "***" in record["preexisting_url_redacted"]
+        assert "pw" not in record["preexisting_url_redacted"]
+        new = os.environ["QCORE_DATABASE_URL"]
+        assert new.endswith("/qcore_ge01_dryrun") and "qcore_dev_test" not in new
+
+    @SEALED_CHEM
+    def test_cli_end_to_end_single_paper(self, tmp_path):
+        from strict_adapter.generic_executor import main
+
+        desc = {
+            "paper_id": "2020全国I卷高考真题化学（教师版）(1)",
+            "subject": "化学",
+            "manifest_path": str(CHEM_MANIFEST),
+            "source_md_path": str(CHEM_MD),
+            "source_pdf_path": str(CHEM_PDF),
+        }
+        dp = tmp_path / "paper.json"
+        dp.write_text(json.dumps(desc, ensure_ascii=False), encoding="utf-8")
+        rc = main([
+            "--paper", str(dp),
+            "--target-db", "qcore_ge01_dryrun",
+            "--out-dir", str(tmp_path / "cli-out"),
+            "--dry-run",
+        ])
+        assert rc == 0
+        assert (tmp_path / "cli-out" / "run_summary.json").is_file()
+        # 逐卷输出（F-4）
+        paper_dir = next((tmp_path / "cli-out" / "papers").iterdir())
+        for fname in ("mapping.json", "admission.json", "persistence.json", "readback.json"):
+            assert (paper_dir / fname).is_file(), fname
+
+    @SEALED_CHEM
+    @SEALED_CHN
+    @SEALED_ENG
+    def test_three_papers_three_subjects_one_entry(self, tmp_path):
+        papers = [
+            PaperInput(
+                paper_id="2020全国I卷高考真题化学（教师版）(1)", subject="化学",
+                manifest_path=CHEM_MANIFEST, source_md_path=CHEM_MD,
+                source_pdf_path=CHEM_PDF, annotated_md_path=None,
+            ),
+            PaperInput(
+                paper_id="2019江苏高考真题语文（教师版）(1)", subject="语文",
+                manifest_path=CHN_MANIFEST, source_md_path=CHN_MD,
+                source_pdf_path=CHN_PDF, annotated_md_path=None,
+            ),
+            PaperInput(
+                paper_id="2019北京高考真题英语（教师版）(1)", subject="英语",
+                manifest_path=ENG_MANIFEST, source_md_path=ENG_MD,
+                source_pdf_path=ENG_PDF, annotated_md_path=None,
+            ),
+        ]
+        s = run_papers(papers, "qcore_ge01_dryrun", tmp_path / "out", "t-3p", dry_run=True)
+        assert s["totals"]["papers"] == 3
+        assert s["totals"]["paper_input_failed"] == 0
+        assert s["totals"]["map_failed"] == 0
+        assert s["totals"]["admitted"] > 20  # 12+15+11 units 全形态
+        subjects = {p["paper_id"][:8]: p["subject"] for p in s["papers"]}
+        assert sorted(subjects.values()) == ["化学", "英语", "语文"]

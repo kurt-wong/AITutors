@@ -167,12 +167,55 @@ def load_paper_descriptors(path: Path) -> list[PaperInput]:
 
 
 def build_context(p: PaperInput, run_id: str) -> tuple[MappingContext, dict]:
-    """构造单卷 MappingContext；哈希/字节现算。annotated 缺省时沿既有驱动惯例回退。"""
+    """构造单卷 MappingContext；哈希/字节现算。annotated 缺省时沿既有驱动惯例回退。
+
+    Manifest↔源文绑定（fail-closed，对齐 run_phase_c 输入校验语义）：
+    - manifest 带 ``source_content_sha256`` 时必须等于 source_md 现算 sha；
+    - manifest 带 ``source_file`` 时必须指向同一 MD（basename 一致）；
+    - manifest 带 ``original_sha256`` 时必须等于 source_pdf 现算 sha。
+    任一不匹配 → InputContractError（该卷 paper_input_failed，不落库）。
+    """
     manifest = json.loads(p.manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest.get("units"), list):
         raise InputContractError(f"manifest has no units[]: {p.manifest_path}")
     lines = load_source_lines(str(p.source_md_path))
     image_by_line = {a["line_no"]: a for a in manifest.get("image_assets", [])}
+
+    md_sha = sha256_file(p.source_md_path)
+    pdf_sha = sha256_file(p.source_pdf_path)
+    binding = {}
+    declared_md_sha = manifest.get("source_content_sha256")
+    if declared_md_sha:
+        binding["source_content_sha256_match"] = declared_md_sha == md_sha
+        if not binding["source_content_sha256_match"]:
+            raise InputContractError(
+                f"manifest source_content_sha256 mismatch for {p.source_md_path.name}: "
+                f"manifest={declared_md_sha} actual={md_sha}"
+            )
+    else:
+        binding["source_content_sha256_match"] = "field_absent_skipped"
+    declared_src = manifest.get("source_file")
+    if declared_src:
+        binding["source_file_basename_match"] = (
+            Path(str(declared_src)).name == p.source_md_path.name
+        )
+        if not binding["source_file_basename_match"]:
+            raise InputContractError(
+                f"manifest source_file points to {Path(str(declared_src)).name!r} "
+                f"but input MD is {p.source_md_path.name!r}"
+            )
+    else:
+        binding["source_file_basename_match"] = "field_absent_skipped"
+    declared_pdf_sha = manifest.get("original_sha256")
+    if declared_pdf_sha:
+        binding["original_sha256_match"] = declared_pdf_sha == pdf_sha
+        if not binding["original_sha256_match"]:
+            raise InputContractError(
+                f"manifest original_sha256 mismatch for {p.source_pdf_path.name}: "
+                f"manifest={declared_pdf_sha} actual={pdf_sha}"
+            )
+    else:
+        binding["original_sha256_match"] = "field_absent_skipped"
 
     ann = p.annotated_md_path
     ann_note = "explicit"
@@ -196,8 +239,8 @@ def build_context(p: PaperInput, run_id: str) -> tuple[MappingContext, dict]:
         source_pdf_name=p.source_pdf_path.name,
         annotated_md_name=ann.name,
         manifest_sha=sha256_file(p.manifest_path),
-        source_md_sha=sha256_file(p.source_md_path),
-        source_pdf_sha=sha256_file(p.source_pdf_path),
+        source_md_sha=md_sha,
+        source_pdf_sha=pdf_sha,
         annotated_md_sha=sha256_file(ann),
         manifest_bytes=p.manifest_path.stat().st_size,
         source_md_bytes=p.source_md_path.stat().st_size,
@@ -213,6 +256,7 @@ def build_context(p: PaperInput, run_id: str) -> tuple[MappingContext, dict]:
         "annotated_md_path": str(ann),
         "manifest_units": len(manifest["units"]),
         "manifest_image_assets": len(image_by_line),
+        "manifest_source_binding": binding,
     }
     return ctx, meta
 
@@ -462,7 +506,7 @@ def run_papers(
     summary["totals"] = {
         "papers": len(papers),
         "units_in": len(flat),
-        "mapped": sum(1 for u in flat if u.get("status") not in ("map_failed", "paper_input_failed") and "status" in u),
+        "mapped": sum(1 for u in flat if u.get("status") not in ("map_failed",) and u.get("status") != "paper_input_failed"),
         "map_failed": sum(1 for u in flat if u.get("status") == "map_failed"),
         "admitted": sum(1 for u in flat if u.get("admitted") is True),
         "not_admitted": sum(1 for u in flat if u.get("status") == "not_admitted"),
@@ -475,7 +519,102 @@ def run_papers(
     (out_dir / "run_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    _write_per_paper_outputs(out_dir, summary)
     return summary
+
+
+def _safe_dirname(paper_id: str) -> str:
+    return re.sub(r"[^0-9A-Za-z一-鿿_-]+", "_", paper_id)[:120]
+
+
+def _write_per_paper_outputs(out_dir: Path, summary: dict) -> None:
+    """逐卷输出（DESIGN §6 承诺）：mapping / admission / persistence / readback。"""
+    readback_by_qid = {
+        u["question_id"]: u for u in summary.get("readback", {}).get("units", [])
+    }
+    for prec in summary.get("papers", []):
+        pd = out_dir / "papers" / _safe_dirname(prec["paper_id"])
+        pd.mkdir(parents=True, exist_ok=True)
+        units = prec.get("units", [])
+        head = {
+            "paper_id": prec.get("paper_id"),
+            "subject": prec.get("subject"),
+            "run_id": summary.get("run_id"),
+            "adapter_version": summary.get("adapter_version"),
+            "target_db": summary.get("target_db"),
+            "status": prec.get("status"),
+            "manifest_source_binding": prec.get("manifest_source_binding"),
+            "annotated_md_resolution": prec.get("annotated_md_resolution"),
+        }
+        (pd / "mapping.json").write_text(
+            json.dumps(
+                {
+                    **head,
+                    "manifest_units": prec.get("manifest_units"),
+                    "mapped_count": prec.get("mapped_count"),
+                    "units": [
+                        {k: u.get(k) for k in ("unit_id", "ordinal", "unit_type", "status", "completeness", "error") if k in u}
+                        for u in units
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (pd / "admission.json").write_text(
+            json.dumps(
+                {
+                    **head,
+                    "units": [
+                        {
+                            k: u.get(k)
+                            for k in (
+                                "unit_id", "ordinal", "status", "validated", "admitted",
+                                "admission_reason", "review_state", "publication_state",
+                                "question_id", "revision_id", "instance_id", "content_hash", "error",
+                            )
+                            if k in u
+                        }
+                        for u in units
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (pd / "persistence.json").write_text(
+            json.dumps(
+                {
+                    **head,
+                    "units": [
+                        {
+                            k: u.get(k)
+                            for k in (
+                                "unit_id", "ordinal", "persist", "candidate_id",
+                                "existing_candidate_id", "error",
+                            )
+                            if k in u
+                        }
+                        for u in units
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        rb_units = []
+        for u in units:
+            qid = u.get("question_id")
+            rb = readback_by_qid.get(qid) if qid else None
+            if rb is not None:
+                rb_units.append(rb)
+        (pd / "readback.json").write_text(
+            json.dumps({**head, "units": rb_units}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
 
 # ---------------------------------------------------------------------------
