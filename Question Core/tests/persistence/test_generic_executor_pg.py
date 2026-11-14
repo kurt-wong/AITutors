@@ -10,15 +10,22 @@ conftest's single-DB coupling.  This suite owns its connection explicitly:
 * safety.verify_test_target runs with a FIXED expected database name
   (no self-certifying derivation from the connection string).
 
-Idempotency cases seed their own writes (DSH F-3): each test is standalone
-and order-independent.
+Idempotency and readback cases seed their own writes AND run over an
+INDEPENDENT per-call paper identity (Owner Phase-2 residual #1): the
+idempotency key derives from `paper_id/unit_id`, so each test call owns
+a fresh idem-key space.  The first run therefore really writes and the
+repeat run really hits the duplicate path on EVERY pytest invocation -
+including repeated runs against the same persistent test database - so
+the DB re-read assertions after the repeat run are never vacuous.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -33,6 +40,12 @@ from strict_adapter.generic_executor import (  # noqa: E402
     PaperInput,
     run_papers,
     validate_target_db_name,
+)
+from question_core.persistence import (  # noqa: E402
+    DatabaseSettings,
+    QuestionCoreRepository,
+    create_db_engine,
+    session_scope,
 )
 from tests.persistence.integration.safety import verify_test_target  # noqa: E402
 
@@ -68,7 +81,11 @@ def ge01_url() -> str:
     url = _test_url()
     # 固定期望库名，禁止从连接串派生（避免自证）
     evidence = verify_test_target(url, expected_database=EXPECTED_DB)
-    assert evidence.get("database") in (None, EXPECTED_DB) or True  # evidence-only
+    # verify_test_target already hard-fails (UnsafeTestTarget) on any
+    # mismatch - including the fixed expected_database check.  This
+    # assertion pins the returned evidence to that same expected value
+    # (DSH Phase-2 residual #2: no always-true assert remains).
+    assert evidence["database"] == EXPECTED_DB
     return url
 
 
@@ -100,6 +117,21 @@ def _run(ge01_url: str, paper: PaperInput, out_dir: Path, run_id: str) -> dict:
     )
 
 
+def _independent_paper(base: PaperInput) -> PaperInput:
+    """Independent test data (Owner Phase-2 residual #1).
+
+    derive_idempotency_key hashes "{paper_id}/{unit_id}" into the key,
+    so a unique per-call paper_id gives this test call its own idem-key
+    space: the first run always writes for real, the repeat run always
+    exercises the duplicate path.  Scope note: the sealed owner
+    overrides (rules.OWNER_ATTRIBUTION_OVERRIDES) are keyed by the
+    original "{paper_id}/{unit_id}" and do not hit under the variant
+    identity; this suite validates entry mechanics (write / idempotency /
+    readback), not the sealed attribution adjudication.
+    """
+    return replace(base, paper_id=f"{base.paper_id}::ge01pg::{uuid4().hex[:8]}")
+
+
 @SEALED
 class TestGuardActuallyOn:
     def test_guard_rejects_protected_databases(self):
@@ -120,21 +152,83 @@ class TestGuardActuallyOn:
 @SEALED
 class TestPersistenceAndIdempotency:
     def test_persist_and_readback(self, tmp_path, ge01_url, chem_paper):
-        s1 = _run(ge01_url, chem_paper, tmp_path / "run1", "ge-pg-persist")
-        t = s1["totals"]
-        assert t["map_failed"] == 0, s1["papers"]
-        assert t["admitted"] > 0
-        assert t["persist_rolled_back"] == 0, s1["papers"]
-        assert t["persist_committed"] + t["persist_skipped_duplicate"] == t["admitted"]
-        for u in s1.get("readback", {}).get("units", []):
+        """Owner five-step behavior: write -> idempotent re-run -> DB re-read.
+
+        1. deterministic input (sealed chem artifacts + independent identity)
+        2. first execution writes for real (fresh idem-key space)
+        3. second execution is recognised as idempotent (zero new rows)
+        4. the expected Questions stay readable from the DB across the
+           repeat run - re-read through the repository below
+        5. assertions cover actual counts and content, not just "no error"
+        """
+        paper = _independent_paper(chem_paper)
+        # ---- (2) first execution: real write ----
+        s1 = _run(ge01_url, paper, tmp_path / "run1", "ge-pg-persist")
+        t1 = s1["totals"]
+        assert t1["map_failed"] == 0, s1["papers"]
+        assert t1["persist_rolled_back"] == 0, s1["papers"]
+        assert t1["persist_committed"] == t1["admitted"] > 0, (
+            "first run over a fresh idem-key space must commit every "
+            "admitted unit"
+        )
+        rb1 = s1.get("readback", {}).get("units", [])
+        assert len(rb1) == t1["persist_committed"], (
+            "readback must cover every committed unit of this execution"
+        )
+        expected: dict[str, str] = {}
+        for pr in s1["papers"]:
+            for u in pr.get("units", []):
+                if u.get("admitted"):
+                    expected[u["question_id"]] = u["content_hash"]
+        assert set(expected) == {u["question_id"] for u in rb1}
+        for u in rb1:
             assert u["ok"], u
-            assert u["instance_source_document_id"] == [chem_paper.paper_id], u
+            assert u["revision_count"] == 1, u
+            assert u["instance_count"] == 1, u
+            assert u["instance_source_document_id"] == [paper.paper_id], u
+        # ---- (3) second execution: idempotent, zero new rows ----
+        s2 = _run(ge01_url, paper, tmp_path / "run2", "ge-pg-idem")
+        t2 = s2["totals"]
+        assert t2["persist_rolled_back"] == 0, s2["papers"]
+        assert t2["persist_committed"] == 0, "idempotent re-run must not insert"
+        assert t2["persist_skipped_duplicate"] == t2["admitted"] == t1["admitted"]
+        for pr in s2["papers"]:
+            for u in pr.get("units", []):
+                if u.get("admitted"):
+                    assert u["persist"] == "skipped_duplicate", u
+                    assert u.get("existing_candidate_id"), u
+        # ---- (4)(5) after the repeat run the SAME expected Questions are
+        # still readable in full (counts + content) ----
+        engine = create_db_engine(DatabaseSettings(url=ge01_url, dbname=EXPECTED_DB))
+        try:
+            with session_scope(engine) as session:
+                repo = QuestionCoreRepository(session)
+                reread = 0
+                for qid_s, content_hash in expected.items():
+                    agg = repo.get_question_aggregate(UUID(qid_s))
+                    assert len(agg.revisions) == 1, qid_s
+                    assert len(agg.instances) == 1, qid_s
+                    assert agg.revisions[0].content_hash == content_hash, qid_s
+                    assert (
+                        str(agg.instances[0].source_document_id) == paper.paper_id
+                    ), qid_s
+                    reread += 1
+                assert reread == t2["admitted"] > 0
+        finally:
+            engine.dispose()
 
     def test_second_run_zero_new_rows(self, tmp_path, ge01_url, chem_paper):
-        # F-3：自含播种——先跑一次（容忍 committed 或 dup），再断言第二跑零新行
-        self_seed = _run(ge01_url, chem_paper, tmp_path / "seed", "ge-pg-seed")
-        assert self_seed["totals"]["admitted"] > 0
-        s2 = _run(ge01_url, chem_paper, tmp_path / "run2", "ge-pg-idem")
+        # F-3 自含播种 + Owner Phase-2 residual #1：独立 paper 身份使播种跑
+        # 在每次 pytest 会话都是真实写入，零新行断言不再依赖执行历史。
+        paper = _independent_paper(chem_paper)
+        self_seed = _run(ge01_url, paper, tmp_path / "seed", "ge-pg-seed")
+        st = self_seed["totals"]
+        assert st["persist_rolled_back"] == 0, self_seed["papers"]
+        assert st["persist_committed"] == st["admitted"] > 0, (
+            "seed run must really write (fresh idem-key space), otherwise "
+            "the zero-new-rows assertion below would be vacuous"
+        )
+        s2 = _run(ge01_url, paper, tmp_path / "run2", "ge-pg-idem")
         t = s2["totals"]
         assert t["persist_rolled_back"] == 0, s2["papers"]
         assert t["persist_committed"] == 0, "idempotent re-run must not insert"
