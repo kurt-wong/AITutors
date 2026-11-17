@@ -25,6 +25,7 @@ from question_core.contracts.v1 import (  # noqa: E402
     PublicationState,
     ReviewState,
 )
+from tests.strict_adapter.legacy_structure import inject_legacy_structure  # noqa: E402
 from strict_adapter.admission import admit  # noqa: E402
 from strict_adapter.extract import load_source_lines  # noqa: E402
 from strict_adapter.mapper import MappingContext, map_all  # noqa: E402
@@ -45,6 +46,7 @@ pytestmark = pytest.mark.skipif(
 def ctx() -> MappingContext:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     lines = load_source_lines(str(SRC_MD))
+    manifest = inject_legacy_structure(manifest, lines)
     return MappingContext(
         lines=lines,
         manifest=manifest,

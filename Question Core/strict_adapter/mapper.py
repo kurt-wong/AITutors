@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from uuid import UUID
 
@@ -66,6 +67,7 @@ from .extract import (
     extract_options,
     extract_range,
     load_source_lines,
+    parse_html_table,
     split_sub_segments,
 )
 from .rules import (
@@ -178,6 +180,13 @@ def _register_asset(asset_id: str, asset_sink: list, ctx: MappingContext, target
             meta = m
             break
     if meta is None:
+        # 行号索引对同行多图只留一席（dict 后写覆盖）；回退全表检索（G4-F2）
+        for m in (ctx.manifest.get("image_assets") or []):
+            src_name = m["src"].rsplit("/", 1)[-1]
+            if src_name.rsplit(".", 1)[0] == asset_id:
+                meta = m
+                break
+    if meta is None:
         raise ValueError(f"image asset {asset_id!r} not found in manifest.image_assets")
     asset_sink.append(
         {
@@ -196,6 +205,93 @@ def _register_asset(asset_id: str, asset_sink: list, ctx: MappingContext, target
     )
 
 
+def _norm_cov(text: str) -> str:
+    return "".join((text or "").split())
+
+
+def _strip_label_marker(text: str) -> str:
+    return re.sub(r"^\s*[A-H]\s*[.．、:：]\s*", "", text or "").strip()
+
+
+def _table_content_missing(
+    unit: dict, ctx: MappingContext, bodies, materials, log: dict
+) -> list[dict]:
+    """G4-R1 R1-03：题面表格内容完整性检查（确定性，fail-closed）。
+
+    口径（Owner：不得整表 MD 总数盲比）：
+      1. Manifest 声明的题面表格范围 = stem_lines / options_lines / materials 行区；
+      2. 逐行解析其中的 HTML 表格 → 非空单元格清单；
+      3. Mapper 输出中对应载体 = 各 body 的 stem_blocks / options blocks /
+         materials blocks（text 与 table cells）；
+      4. 逐单元格做规范化包含核对（整格文本，或去掉标签前缀后的余文）。
+    返回缺失清单（空 = 完整）。
+    """
+    ranges: list[tuple[int, int]] = []
+    for key in ("stem_lines", "options_lines"):
+        r = unit.get(key)
+        if r and r[0] is not None:
+            s = int(r[0])
+            e = int(r[1]) if len(r) > 1 and r[1] is not None else s
+            ranges.append((s, e))
+    for m in unit.get("materials") or []:
+        if m.get("line_start") is not None:
+            s = int(m["line_start"])
+            e = int(m.get("line_end") or s)
+            ranges.append((s, e))
+    md_cells: list[tuple[int, str]] = []
+    for s, e in ranges:
+        for ln in range(s, e + 1):
+            line = ctx.lines[ln - 1] if 0 < ln <= len(ctx.lines) else ""
+            if "<table" not in line:
+                continue
+            try:
+                rt = parse_html_table(line)
+            except ValueError:
+                continue
+            for c in rt.cells:
+                txt = (c.get("content") or "").strip()
+                if txt:
+                    md_cells.append((ln, txt))
+    if not md_cells:
+        return []
+
+    parts: list[str] = []
+
+    def _collect(b) -> None:
+        kind = getattr(b, "kind", "")
+        if kind == "text":
+            parts.append(getattr(b, "text", "") or "")
+        elif kind == "table":
+            for cell in b.cells:
+                parts.append(cell.content or "")
+        elif kind == "chemical":
+            parts.append(getattr(b, "formula", "") or "")
+        elif kind == "math":
+            parts.append(getattr(b, "latex", "") or "")
+
+    for body in bodies:
+        for b in body.stem_blocks:
+            _collect(b)
+        for o in body.options:
+            for b in o.blocks:
+                _collect(b)
+    for mat in materials:
+        for b in mat.blocks:
+            _collect(b)
+    blob = _norm_cov("\n".join(parts))
+
+    missing = []
+    for ln, txt in md_cells:
+        n = _norm_cov(txt)
+        if n and n in blob:
+            continue
+        n2 = _norm_cov(_strip_label_marker(txt))
+        if n2 and n2 in blob:
+            continue
+        missing.append({"line": ln, "cell": txt[:60]})
+    return missing
+
+
 def _register_answer_asset(asset_ref: str, asset_sink: list, ctx: MappingContext) -> str:
     """答案图片槽位的 canonical asset_id 解析（DSH Phase3 基线 §0.2）。
 
@@ -203,10 +299,10 @@ def _register_answer_asset(asset_ref: str, asset_sink: list, ctx: MappingContext
     已登记资产只提升 role 为 answer_image（查询便利），不重复登记。
     """
     stem = asset_ref.rsplit(".", 1)[0]
-    # 唯一命中校验
+    # 唯一命中校验（全表检索：行号索引对同行多图只留一席，G4-F2）
     hits = [
         m
-        for _, m in ctx.image_by_line.items()
+        for m in (ctx.manifest.get("image_assets") or [])
         if (m["src"].rsplit("/", 1)[-1]).rsplit(".", 1)[0] == stem
     ]
     if len(hits) != 1:
@@ -279,13 +375,17 @@ def _rebuild(obj, **updates):
 
 
 def _norm_label_key(label: str | None) -> str:
-    """印刷标签归一为数字键：``（1）``/``(1)``/``1`` → ``1``。"""
-    import re
+    """印刷标签**格式**归一（G3-B B2-3 / P-04）：NFKC 全半角等价 + 去空白。
+
+    保留层级身份：``（2）（ⅰ）``/``(2)(i)`` 与 ``（2）`` 是不同标签，绝不做数字
+    前缀跨级归一（旧数字前缀正则把 (2)(i)/(2)(ii) 全撞成 "2"，
+    S03 U17 实证错绑）。匹配失败走显式未绑定/失败路径，不猜。"""
+    import unicodedata
 
     if not label:
         return ""
-    m = re.search(r"(\d+)", label)
-    return m.group(1) if m else str(label).strip().upper()
+    s = unicodedata.normalize("NFKC", str(label))
+    return "".join(s.split())
 
 
 def _derive_slot_id(item: dict, fallback_index: int, sub_label: str | None) -> str:
@@ -508,6 +608,8 @@ def _build_answers(
     asset_resolver=None,
     override_reason: str | None = None,
 ) -> tuple:
+    # sub_id_map 语义（G3-B B2-3 / P-04）：同时含 sub_id→local_id（sub_ref 首选）
+    # 与完整标签格式键→local_id（回落）；数字前缀归一已废除。
     """Manifest `answers[]` → TypedAnswer（G-04/G-05/G-06，Phase 3）。
 
     - composite_unit → 1 个 CompositeAnswer（每 sub_label 一个 CompositeSubAnswer）
@@ -633,12 +735,14 @@ def _build_answers(
         traces.append(trace)
         prepared.append({**item, "_trace_idx": idx})
 
-    # ---- 分组：composite 按 sub_label；standalone 为单对象 ----
+    # ---- 分组：composite 按唯一小问身份（answers[].sub_ref）；无 sub_ref 时
+    # 回落完整标签（格式键）；standalone 为单对象。印刷标签（sub_label）仅作
+    # 展示，不得作绑定主键——同题不同层级可有相同印刷标签（G4-R1 R1-04）。
     is_composite = (unit.get("unit_type") == "composite_question")
     groups: list[tuple[str | None, list[dict]]] = []
     seen: dict[str, int] = {}
     for it in prepared:
-        key = it.get("sub_label")
+        key = it.get("sub_ref") or it.get("sub_label")
         if key in seen:
             groups[seen[key]][1].append(it)
         else:
@@ -729,7 +833,31 @@ def _build_answers(
     answers_out = []
     if is_composite:
         subs = []
-        for sub_index, (sub_label, sub_items) in enumerate(groups):
+        for sub_index, (sub_key, sub_items) in enumerate(groups):
+            # 展示标签 = 印刷标签（保留原文）；绑定身份 = sub_key（sub_ref 优先）
+            sub_label = next(
+                (i.get("sub_label") for i in sub_items if i.get("sub_label")), sub_key
+            )
+            # P-04 身份顺序：① answers[].sub_ref ② 完整标签（格式等价）③ 显式未绑定
+            _sub_ref = next(
+                (i.get("sub_ref") for i in sub_items if i.get("sub_ref")), None
+            )
+            if _sub_ref:
+                _body_id = (sub_id_map or {}).get(_sub_ref)
+                if _body_id is None:
+                    raise ValueError(
+                        f"{unit_id}: input_contract_gap — answers[].sub_ref {_sub_ref!r} "
+                        "unresolved (explicit id; no fallback)"
+                    )
+            elif sub_label:
+                _body_id = (sub_id_map or {}).get(_norm_label_key(sub_label))
+                if _body_id is None:
+                    log.setdefault("unresolved_sub_bindings", []).append(
+                        {"sub_label": sub_label, "reason": "full-label match miss after "
+                         "format-only norm (no numeric-prefix collapse); pending"}
+                    )
+            else:
+                _body_id = None
             sub_statements = []
             slot_bindings = []
             for j, it in enumerate(sub_items):
@@ -768,9 +896,7 @@ def _build_answers(
                         slot_index=j,
                         slot_id=slot_id,
                         sub_label=sub_label,
-                        sub_body_local_id=(sub_id_map or {}).get(
-                            _norm_label_key(sub_label)
-                        ),
+                        sub_body_local_id=_body_id,
                     )
                 )
             sub_attr = _attribution_for(sub_items)
@@ -806,9 +932,7 @@ def _build_answers(
             subs.append(
                 CompositeSubAnswer(
                     sub_label=sub_label or "ans",
-                    sub_body_local_id=(sub_id_map or {}).get(
-                        _norm_label_key(sub_label)
-                    ),
+                    sub_body_local_id=_body_id,
                     answer_value=inner,
                     evidence_kind=evidence_kind,
                     completeness=comp,
@@ -1452,6 +1576,15 @@ def _build_evidence(
 def _composite_bodies_and_materials(
     unit: dict, ctx: MappingContext, asset_sink: list, log: dict
 ):
+    """composite 内容构建（G3-B B2-2 / P-07）：只消费 Manifest 结构。
+
+    - 结构来源 = ``sub_questions[]`` 树（实体/层级/区间/归属），直接构建
+      QuestionBody 父子（parent_question_ref/sub_question_ids）；
+    - ``materials[]`` 材料实体逐条消费，小问按 ``materials_used[]`` 逐小问挂载
+      （替换旧「统一挂载」）；``material_lines`` 只是兼容投影，不作消费源；
+    - 旧 manifest 缺 ``sub_questions`` → 显式 ``input_contract_gap`` 失败，
+      **不启用正则兜底**（split_sub_segments 已降 audit-only）。
+    """
     unit_id = unit["unit_id"]
     base = unit_id.lower()
     if unit.get("extra_image_blocks"):
@@ -1461,83 +1594,173 @@ def _composite_bodies_and_materials(
             f"extra_image_blocks not supported on composite units (unit {unit_id!r})"
         )
     qrange = unit.get("questions_lines")
-    mrange = unit.get("material_lines")
     if not qrange:
         raise ValueError(f"{unit_id}: composite unit without questions_lines")
 
+    subs_decl = unit.get("sub_questions")
+    if not subs_decl:
+        raise ValueError(
+            f"{unit_id}: input_contract_gap — composite unit without "
+            "sub_questions (G3 new-structure contract; regex fallback retired)"
+        )
+
+    # ---- materials[]（M:N 实体）----
     materials = []
-    material_ids = []
-    if mrange:
-        mres = extract_range(ctx.lines, mrange[0], mrange[1])
+    mat_by_id = {}
+    for mi, m in enumerate(unit.get("materials") or []):
+        if not isinstance(m, dict):
+            raise ValueError(f"{unit_id}: materials[{mi}] not an object (input_contract_gap)")
+        mid = (m.get("material_id") or f"{base}-m{mi + 1}")
+        if mid in mat_by_id:
+            raise ValueError(f"{unit_id}: duplicate material_id {mid!r} (input_contract_gap)")
+        s, e = m.get("line_start"), m.get("line_end")
+        if not (isinstance(s, int) and isinstance(e, int) and not isinstance(s, bool)
+                and not isinstance(e, bool) and 1 <= s <= e):
+            raise ValueError(
+                f"{unit_id}: material {mid!r} illegal lines {s!r},{e!r} (input_contract_gap)"
+            )
+        mres = extract_range(ctx.lines, s, e)
         mblocks = _blocks_from_raw(mres.blocks, asset_sink, ctx, f"{base}-material")
         mat = Material(
-            material_id=f"{base}-material",
-            title=None,
+            material_id=mid,
+            title=m.get("label"),
             blocks=tuple(mblocks),
-            line_start=mrange[0],
-            line_end=mrange[1],
-            note="shared material extracted from manifest.material_lines (verbatim)",
+            line_start=s,
+            line_end=e,
+            note="material entity from manifest.materials[] (verbatim; M:N via materials_used)",
         )
         materials.append(mat)
-        material_ids.append(mat.material_id)
+        mat_by_id[mid] = mat
 
-    skip = [tuple(mrange)] if mrange else []
-    segs, leads = split_sub_segments(ctx.lines, qrange[0], qrange[1], skip)
-    log["sub_segments"] = [
-        {"label": lb, "line_start": s, "line_end": e} for lb, s, e in segs
-    ]
-    log["lead_ranges"] = [{"line_start": a, "line_end": b} for a, b in leads]
+    # ---- sub_questions 树 → 实体/层级 ----
+    sub_by_id: dict[str, dict] = {}
+    sub_order: list[str] = []
+    for si, sq in enumerate(subs_decl):
+        if not isinstance(sq, dict):
+            raise ValueError(f"{unit_id}: sub_questions[{si}] not an object (input_contract_gap)")
+        sid = sq.get("sub_id")
+        if not isinstance(sid, str) or not sid:
+            raise ValueError(f"{unit_id}: sub_questions[{si}] missing sub_id (input_contract_gap)")
+        if sid in sub_by_id:
+            raise ValueError(f"{unit_id}: duplicate sub_id {sid!r} (input_contract_gap)")
+        s, e = sq.get("line_start"), sq.get("line_end")
+        if not (isinstance(s, int) and isinstance(e, int) and not isinstance(s, bool)
+                and not isinstance(e, bool) and 1 <= s <= e):
+            raise ValueError(
+                f"{unit_id}/{sid}: illegal sub lines {s!r},{e!r} (input_contract_gap)"
+            )
+        sub_by_id[sid] = sq
+        sub_order.append(sid)
 
-    if not segs:
-        raise ValueError(
-            f"{unit_id}: composite unit produced no sub-question segments; "
-            "refusing to guess structure"
-        )
+    children: dict[str, list[str]] = {sid: [] for sid in sub_order}
+    roots: list[str] = []
+    for sid in sub_order:
+        par = sub_by_id[sid].get("parent_sub_id")
+        if par is None:
+            roots.append(sid)
+        elif par not in sub_by_id:
+            raise ValueError(
+                f"{unit_id}/{sid}: parent_sub_id {par!r} unresolved (input_contract_gap)"
+            )
+        else:
+            children[par].append(sid)
+
+    # ---- 父体 stem = questions_lines −（小问区 ∪ 材料区）的最大间隙 ----
+    covered = [(sub_by_id[s]["line_start"], sub_by_id[s]["line_end"]) for s in sub_order]
+    covered += [(m.line_start, m.line_end) for m in materials]
+    covered.sort()
+    lead: list[tuple[int, int]] = []
+    cur = qrange[0]
+    for s, e in covered:
+        s2, e2 = max(s, qrange[0]), min(e, qrange[1])
+        if e2 < cur:
+            continue
+        if s2 > cur:
+            lead.append((cur, s2 - 1))
+        cur = max(cur, e2 + 1)
+    if cur <= qrange[1]:
+        lead.append((cur, qrange[1]))
 
     parent_blocks = []
-    for a, b in leads:
+    for a, b in lead:
         r = extract_range(ctx.lines, a, b)
         parent_blocks.extend(_blocks_from_raw(r.blocks, asset_sink, ctx, f"{base}"))
     if not parent_blocks:
         parent_blocks = [TextBlock(text="", line_start=qrange[0], line_end=qrange[0])]
 
-    sub_ids = [f"{base}-s{i+1}" for i in range(len(segs))]
+    # ---- audit-only：正则切点 vs 声明切点（不参与任何映射/兜底）----
+    try:
+        _segs, _leads = split_sub_segments(ctx.lines, qrange[0], qrange[1], [])
+        log["sub_segment_audit"] = {
+            "note": "audit-only (P-07): regex cut points vs manifest declarations; "
+                    "NOT used for mapping",
+            "regex_segments": [
+                {"label": lb, "line_start": s, "line_end": e} for lb, s, e in _segs
+            ],
+            "declared_segments": [
+                {"sub_id": sid,
+                 "line_start": sub_by_id[sid]["line_start"],
+                 "line_end": sub_by_id[sid]["line_end"]}
+                for sid in sub_order
+            ],
+        }
+    except Exception as exc:  # 审计失败不影响映射
+        log["sub_segment_audit"] = {"note": "audit-only failed", "error": str(exc)}
+
     parent = QuestionBody(
         local_id=base,
         question_type=QuestionType(question_type(unit)),
         printed_number=unit.get("printed_number"),
         stem_blocks=tuple(parent_blocks),
         options=(),
-        material_ids=tuple(material_ids),
+        material_ids=tuple(m.material_id for m in materials),
         parent_question_ref=None,
-        sub_question_ids=tuple(sub_ids),
+        sub_question_ids=tuple(roots),
         unit_type=UnitType(unit.get("unit_type") or "composite_question"),
-        note=(
-            "composite parent; sub-questions segmented ONLY on printed labels "
-            f"at line starts within questions_lines {qrange} (cut points logged)"
-        ),
+        note="composite parent; structure from manifest.sub_questions tree (verbatim)",
     )
 
     bodies = [parent]
-    for (label, s, e), sub_id in zip(segs, sub_ids):
+    for sid in sub_order:
+        sq = sub_by_id[sid]
+        s, e = sq["line_start"], sq["line_end"]
         r = extract_range(ctx.lines, s, e)
-        blocks = _blocks_from_raw(r.blocks, asset_sink, ctx, sub_id)
+        blocks = _blocks_from_raw(r.blocks, asset_sink, ctx, sid)
         if not blocks:
             blocks = [TextBlock(text="", line_start=s, line_end=e)]
+        used = []
+        for mref in sq.get("materials_used") or []:
+            if mref not in mat_by_id:
+                raise ValueError(
+                    f"{unit_id}/{sid}: materials_used {mref!r} unresolved (input_contract_gap)"
+                )
+            used.append(mref)
+        par = sq.get("parent_sub_id")
         bodies.append(
             QuestionBody(
-                local_id=sub_id,
+                local_id=sid,
                 question_type=QuestionType(question_type(unit)),
-                printed_number=label,
+                printed_number=sq.get("label"),
                 stem_blocks=tuple(blocks),
                 options=(),
-                material_ids=tuple(material_ids),
-                parent_question_ref=base,
-                sub_question_ids=(),
+                material_ids=tuple(used),
+                parent_question_ref=(par if par is not None else base),
+                sub_question_ids=tuple(children.get(sid, ())),
                 unit_type=UnitType(unit.get("unit_type") or "composite_question"),
-                note=f"sub-question segmented on printed label {label!r} (L{s}-L{e})",
+                note=(
+                    f"sub-question from manifest.sub_questions {sid!r} (L{s}-L{e}); "
+                    f"label={sq.get('label')!r}; materials_used={used}"
+                ),
             )
         )
+    log["g3_structure"] = {
+        "sub_ids": sub_order,
+        "roots": roots,
+        "materials": [m.material_id for m in materials],
+        "grouping_statements": unit.get("grouping_statements") or [],
+        "classification": unit.get("classification"),
+        "uncertainty": unit.get("uncertainty"),
+    }
     return bodies, materials
 
 
@@ -1631,24 +1854,24 @@ def _standalone_body(
         {"label": o["label"], "start": o["start_line"], "end": o["end_line"]}
         for o in (unit.get("options") or [])
     ]
-    options_raw, shared_table = None, None
+    options_raw, shared_tables = None, []
     if opt_specs:
         from .extract import OptionSpec
 
-        options_raw, shared_table = extract_options(
+        region = tuple(unit["options_lines"]) if unit.get("options_lines") else None
+        options_raw, shared_tables = extract_options(
             ctx.lines,
             [OptionSpec(label=o["label"], start=o["start"], end=o["end"]) for o in opt_specs],
+            region=region,
         )
         log["option_mode"] = (
-            "shared_html_table" if shared_table is not None else "independent_ranges"
+            "shared_html_table" if shared_tables else "independent_ranges"
         )
-    if shared_table is not None:
-        st = _raw_table_to_table_block(
-            shared_table,
-            unit["options_lines"][0] if unit.get("options_lines") else None,
-            unit["options_lines"][1] if unit.get("options_lines") else None,
-        )
-        parent_blocks = list(parent_blocks) + [st]
+    if shared_tables:
+        _ol = unit.get("options_lines") or [None, None]
+        for st in shared_tables:
+            stb = _raw_table_to_table_block(st, _ol[0], _ol[1])
+            parent_blocks = list(parent_blocks) + [stb]
 
     options = tuple(
         OptionItem(
@@ -1743,8 +1966,11 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
     ans_img_records = tuple(_answer_region_images(unit, ctx, asset_sink, log))
 
     # ---- 答案对象（answers[] 逐条消费；在 assets 收口前完成以便答案图登记）----
+    # P-04：sub_id 显式身份（answers[].sub_ref 首选）+ 完整标签格式键（回落）。
     sub_id_map: dict[str, str] = {}
     for b in bodies:
+        if b.local_id:
+            sub_id_map[b.local_id] = b.local_id
         if b.parent_question_ref is not None and b.printed_number:
             sub_id_map[_norm_label_key(b.printed_number)] = b.local_id
 
@@ -1791,6 +2017,12 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         assets=assets,
     )
 
+    # G4-R1 R1-03：题面表格内容完整性检查（声明范围 ↔ 输出载体）
+    table_missing = _table_content_missing(unit, ctx, bodies, materials, log)
+    log["table_content_loss"] = table_missing[:20]
+    if table_missing:
+        log["table_content_loss_count"] = len(table_missing)
+
     evidence = _build_evidence(
         unit,
         answers,
@@ -1829,6 +2061,10 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         core_completeness = (
             Completeness.COMPLETE if all_full else Completeness.INCOMPLETE
         )
+    if table_missing and core_completeness == Completeness.COMPLETE:
+        # R1-03：题面表格内容静默丢失时不得判 complete（fail-closed）
+        core_completeness = Completeness.INCOMPLETE
+        log["core_completeness_downgraded"] = "table_content_loss"
     declaration = _rebuild(declaration, completeness=core_completeness)
     log["declaration"] = declaration.model_dump(mode="json")
     log["core_completeness"] = core_completeness.value
@@ -1973,6 +2209,10 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
     log["content_hash"] = content_hash
 
     state_plan = "approve_publish" if core_completeness == Completeness.COMPLETE else "hold_not_ready"
+    # G3-B B2（P-13/§5.1）：结构不确定声明 → 一律 hold_not_ready，不伪装确定。
+    if unit.get("uncertainty"):
+        state_plan = "hold_not_ready"
+        log["uncertainty_hold"] = True
     log["state_plan"] = state_plan
 
     return UnitMapping(

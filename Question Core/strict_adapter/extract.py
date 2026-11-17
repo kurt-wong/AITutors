@@ -67,6 +67,7 @@ def parse_html_table(html: str) -> RawTable:
                     "row_index": r,
                     "col_index": c,
                     "content": _strip_tags(inner),
+                    "image_srcs": _IMG_RE.findall(inner),
                     "rowspan": rowspan,
                     "colspan": colspan,
                     "is_header": tag.lower() == "th" or r == 0,
@@ -309,32 +310,250 @@ def _split_inline_shared_options(
     return out
 
 
+_FOOTER_RE = re.compile(r"^\s*第\s*\d+\s*页\s*[/_／]\s*共\s*\d+\s*页\s*$")
+
+
+def _drop_footer_lines(text: str) -> str:
+    """剔除版面页脚行（第N页/共M页）——页脚不得成为选项正文（G4-R1 R1-05）。"""
+    kept = [ln for ln in text.split("\n") if not _FOOTER_RE.match(ln)]
+    return "\n".join(kept).strip()
+
+
+def _norm_cell_label(text: str) -> str:
+    return (text or "").strip().upper().rstrip("．.、")
+
+
+def _table_rows(rt: RawTable) -> list[list[dict]]:
+    rows: dict[int, list[dict]] = {}
+    for c in rt.cells:
+        rows.setdefault(c["row_index"], []).append(c)
+    return [rows[k] for k in sorted(rows)]
+
+
+def _label_row_map(tables: list[RawTable], labels: list[str]) -> dict[str, list[dict]] | None:
+    """策略 A：某单元格恰为选项标签 → 该行整行为该选项内容（多表扫描）。"""
+    want = {lb.strip().upper(): lb for lb in labels}
+    found: dict[str, list[dict]] = {}
+    for rt in tables:
+        for row in _table_rows(rt):
+            for c in row:
+                key = _norm_cell_label(c["content"])
+                if key in want and want[key] not in found:
+                    found[want[key]] = row
+    if all(lb in found for lb in labels):
+        return found
+    return None
+
+
+def _expand_label_rows(
+    tables: list[RawTable], found: dict[str, list[dict]]
+) -> dict[str, list[dict]] | None:
+    """标签列扩展（G4-R1）：表格自带标签列（首格为 A-H 字面标签）且声明标签
+    为其子集（S12 U5 只声明 A）→ 按行序收齐连续标签行。仅当合并后标签恰为
+    连续 A..X 且无重复才成立（确定性，无猜测）。
+    """
+    taken = {id(c) for row in found.values() for c in row}
+    extras: list[tuple[str, list[dict]]] = []
+    for rt in tables:
+        for row in _table_rows(rt):
+            if any(id(c) in taken for c in row):
+                continue
+            first = _norm_cell_label(row[0]["content"]) if row else ""
+            if re.fullmatch(r"[A-H]", first):
+                extras.append((first, row))
+    if not extras:
+        return None
+    merged = list(found.items()) + extras
+    order = [lb for lb, _ in merged]
+    want = [chr(ord("A") + i) for i in range(len(order))]
+    if sorted(order) == want and len(set(order)) == len(order):
+        return dict(merged)
+    return None
+
+
+def _table_option_rows(
+    tables: list[RawTable], options: list[OptionSpec], s: int, e: int
+) -> tuple[list[tuple[str, list[dict]]] | None, int]:
+    """共享/区域 HTML 表格的选项切分（确定性，全有或全无）。
+
+    返回 (rows, consumed_cells)；rows=None 表示全部策略未命中。
+    策略顺序：
+      A：行标签单元格（标签列+内容列版式，多表扫描）+ 标签列扩展；
+      B：标签前缀单元格（"A. Cl₂收集…"）+ 同列其他行 <img>；
+      C：标签→引用 清单单元格（"A.①B.② C.③D.④"）。
+    """
+    labels = [o.label for o in options]
+    consumed = 0
+
+    # ---- 策略 A：行标签单元格（+标签列扩展） ----
+    found = _label_row_map(tables, labels)
+    if found is not None:
+        expanded = _expand_label_rows(tables, found)
+        if expanded is not None:
+            found = expanded
+        rows = []
+        for lb, row in found.items():
+            blocks: list[dict] = []
+            for c in row:
+                consumed += 1
+                txt = _drop_footer_lines(c["content"])
+                if txt:
+                    blocks.append({"kind": "text", "text": txt, "line_start": s, "line_end": e})
+                for src in c.get("image_srcs") or []:
+                    blocks.append({
+                        "kind": "image", "asset_id": _asset_id_from_src(src),
+                        "alt_text": None, "line_start": s, "line_end": e,
+                    })
+            if blocks:
+                rows.append((lb, blocks))
+        if rows:
+            return rows, consumed
+
+    # ---- 策略 B：标签前缀单元格（+同列图片） ----
+    rows = []
+    used_cells: set = set()
+    ok = True
+    for opt in options:
+        label_raw = opt.label.strip()
+        hit = None
+        for rt in tables:
+            for cell in rt.cells:
+                key = (id(rt), cell["row_index"], cell["col_index"])
+                if key in used_cells:
+                    continue
+                m = re.match(
+                    r"^\s*" + re.escape(label_raw) + r"\s*[.．、:：]", cell["content"], re.I
+                )
+                if m:
+                    hit = (rt, cell, m)
+                    break
+            if hit:
+                break
+        if hit is None:
+            ok = False
+            break
+        rt, cell, m = hit
+        used_cells.add((id(rt), cell["row_index"], cell["col_index"]))
+        consumed += 1
+        text = _drop_footer_lines(cell["content"][m.end():])
+        if not text:
+            ok = False
+            break
+        blocks = [{"kind": "text", "text": text, "line_start": s, "line_end": e}]
+        for other in rt.cells:
+            if other["col_index"] == cell["col_index"] and other["row_index"] != cell["row_index"]:
+                for src in other.get("image_srcs") or []:
+                    blocks.append({
+                        "kind": "image", "asset_id": _asset_id_from_src(src),
+                        "alt_text": None, "line_start": s, "line_end": e,
+                    })
+        rows.append((opt.label, blocks))
+    if ok:
+        return rows, consumed
+
+    # ---- 策略 C：标签→引用 清单单元格 ----
+    for rt in tables:
+        for cand in rt.cells:
+            content = cand["content"]
+            parsed: list[tuple[str, str]] = []
+            pos = 0
+            ok_c = True
+            for i, opt in enumerate(options):
+                label_raw = opt.label.strip()
+                remain = [re.escape(o.label.strip()) for o in options[i + 1:]]
+                lookahead = (
+                    r"(?=\s*(?:" + "|".join(remain) + r")[.．、:：]|$)" if remain else r"$"
+                )
+                m = re.search(
+                    re.escape(label_raw) + r"\s*[.．、:：]?\s*(.+?)" + lookahead,
+                    content[pos:],
+                    re.I,
+                )
+                if m is None or not m.group(1).strip():
+                    ok_c = False
+                    break
+                parsed.append((opt.label, m.group(1).strip()))
+                pos += m.end()
+            if ok_c and len(parsed) == len(options):
+                consumed += 1
+                return [
+                    (label, [{"kind": "text", "text": text, "line_start": s, "line_end": e}])
+                    for label, text in parsed
+                ], consumed
+    return None, consumed
+
+
 def extract_options(
-    lines: list[str], options: list[OptionSpec]
-) -> tuple[list[dict], RawTable | None]:
+    lines: list[str], options: list[OptionSpec], region: tuple[int, int] | None = None
+) -> tuple[list[dict], list[RawTable]]:
     """按 Manifest 逐选项行区提取。
 
     - 常规：每选项独立行区 → 逐行字面文本。
     - 共享行区（多个选项同一 [s,e]）：
-      · HTML 表格：解析表格，以印刷标签匹配表格行；每选项 blocks =
-        该行各单元格文本；同时返回完整 RawTable 供父体 stem_blocks 保留整表网格。
-      · 普通文本（同行/同区多选项）：按印刷标记切分，逐选项赋真实片段
-        与行区间（R1 B1）；切分失败 fail-closed，不产出空选项。
+      · HTML 表格：解析表格，确定性策略切分选项；同时返回行区内全部
+        RawTable 供父体 stem_blocks 保留整表网格。
+      · 普通文本（同行/同区多选项）：按印刷标记切分（R1 B1）；切分失败
+        fail-closed，不产出空选项。
+    - region（单元 options_lines，G4-R1）：当声明的逐选项行区未覆盖表格
+      （选项行指向 OCR 回声行/页脚行）而 options_lines 内存在表格时，以
+      region 为表格探测范围，按「标签列+内容列」等版式提取。
+    选项正文中的版面页脚（第N页/共M页）一律剔除（R1-05）。
     """
     if not options:
-        return [], None
+        return [], []
     spans = {(o.start, o.end) for o in options}
     shared = len(spans) == 1 and len(options) > 1
-    table: RawTable | None = None
+    s0, e0 = next(iter(spans))
     out: list[dict] = []
 
+    rs, re_ = region if region else (s0, e0)
+    span = (min(s0, rs), max(e0, re_))
+    res_span = extract_range(lines, span[0], span[1])
+    span_tables = res_span.tables
+    res_decl = extract_range(lines, s0, e0)
+    decl_tables = res_decl.tables
+
+    def _finalize(blocks: list[dict]) -> list[dict]:
+        fin = []
+        for b in blocks:
+            if b.get("kind") == "text":
+                txt = _drop_footer_lines(b.get("text") or "")
+                if not txt:
+                    continue
+                fin.append({**b, "text": txt})
+            else:
+                fin.append(b)
+        return fin
+
+    # ---- 表格驱动（共享行区，或声明行区未覆盖的 options_lines 表格） ----
+    table_driven = bool(span_tables) and (shared or not decl_tables)
+    if table_driven:
+        tables = span_tables
+        rows, _consumed = _table_option_rows(tables, options, span[0], span[1])
+        if rows is not None:
+            by_label = {lb: blocks for lb, blocks in rows}
+            known = {o.label for o in options}
+            for opt in options:
+                blocks = _finalize(by_label.get(opt.label) or [])
+                out.append({
+                    "label": opt.label, "blocks": blocks,
+                    "line_start": span[0], "line_end": span[1],
+                })
+            for lb, blocks in rows:
+                if lb not in known:
+                    out.append({
+                        "label": lb, "blocks": _finalize(blocks),
+                        "line_start": span[0], "line_end": span[1],
+                    })
+            return out, tables
+        # 策略未命中 → 落回既有路径
+
+    # ---- 共享行区非表格：同行多选项文本切分（B1） ----
     if shared:
-        s, e = next(iter(spans))
-        res = extract_range(lines, s, e)
-        if res.tables:
-            table = res.tables[0]
+        s, e = s0, e0
+        table = decl_tables[0] if decl_tables else None
+        tables = decl_tables
         if table is None:
-            # 共享行区但非 HTML 表格：同行多选项文本切分（B1）
             split = _split_inline_shared_options(lines, s, e, options)
             if split is None:
                 raise ValueError(
@@ -344,62 +563,53 @@ def extract_options(
                 )
             for opt in options:
                 info = split[opt.label]
-                out.append({
-                    "label": opt.label,
-                    "blocks": [{
-                        "kind": "text",
-                        "text": info["text"],
-                        "line_start": info["line_start"],
-                        "line_end": info["line_end"],
-                    }],
-                    "line_start": info["line_start"],
-                    "line_end": info["line_end"],
-                })
-            return out, table
-        for opt in options:
-            row_cells: list[dict] = []
-            label_norm = opt.label.strip().upper()
-            row_idx = None
-            for cell in table.cells:
-                if cell["content"].strip().upper().rstrip("．.、") == label_norm:
-                    row_idx = cell["row_index"]
-                    break
-            if row_idx is not None:
-                row_cells = [
-                    c for c in table.cells if c["row_index"] == row_idx
-                ]
-            if row_cells:
-                blocks = [
-                    {
-                        "kind": "text",
-                        "text": c["content"],
-                        "line_start": s,
-                        "line_end": e,
-                    }
-                    for c in row_cells
-                ]
+                blocks = _finalize([{
+                    "kind": "text", "text": info["text"],
+                    "line_start": info["line_start"], "line_end": info["line_end"],
+                }])
                 if not blocks:
-                    blocks = [
-                        {"kind": "text", "text": "", "line_start": s, "line_end": e}
-                    ]
-            else:
-                blocks = [
-                    {"kind": "text", "text": "", "line_start": s, "line_end": e}
-                ]
-            out.append({"label": opt.label, "blocks": blocks, "line_start": s, "line_end": e})
-        return out, table
+                    raise ValueError(
+                        f"shared option region L{s}-L{e}: option {opt.label!r} "
+                        "reduced to empty after footer filter (fail-closed)"
+                    )
+                out.append({
+                    "label": opt.label, "blocks": blocks,
+                    "line_start": info["line_start"], "line_end": info["line_end"],
+                })
+            return out, tables
+        rows, _consumed = _table_option_rows(tables, options, s, e)
+        if rows is not None:
+            by_label = {lb: blocks for lb, blocks in rows}
+            known = {o.label for o in options}
+            for opt in options:
+                out.append({
+                    "label": opt.label, "blocks": _finalize(by_label.get(opt.label) or []),
+                    "line_start": s, "line_end": e,
+                })
+            for lb, blocks in rows:
+                if lb not in known:
+                    out.append({
+                        "label": lb, "blocks": _finalize(blocks),
+                        "line_start": s, "line_end": e,
+                    })
+            return out, tables
+        # 全部确定性策略均未命中：维持既有行为（空文本块），交 content audit 阻断
+        for opt in options:
+            out.append({
+                "label": opt.label,
+                "blocks": [{"kind": "text", "text": "", "line_start": s, "line_end": e}],
+                "line_start": s, "line_end": e,
+            })
+        return out, tables
 
+    # ---- 独立行区 ----
     for opt in options:
         res = extract_range(lines, opt.start, opt.end)
-        blocks = res.blocks or [
-            {"kind": "text", "text": "", "line_start": opt.start, "line_end": opt.end}
-        ]
-        out.append(
-            {
-                "label": opt.label,
-                "blocks": blocks,
-                "line_start": opt.start,
-                "line_end": opt.end,
-            }
-        )
-    return out, table
+        blocks = _finalize(res.blocks or [])
+        if not blocks:
+            blocks = [{"kind": "text", "text": "", "line_start": opt.start, "line_end": opt.end}]
+        out.append({
+            "label": opt.label, "blocks": blocks,
+            "line_start": opt.start, "line_end": opt.end,
+        })
+    return out, []

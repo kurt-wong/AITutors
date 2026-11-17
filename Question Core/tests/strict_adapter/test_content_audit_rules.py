@@ -19,6 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from tests.strict_adapter.legacy_structure import inject_legacy_structure  # noqa: E402
 from strict_adapter.admission import admit  # noqa: E402
 from strict_adapter.content_audit import (  # noqa: E402
     ContentAuditError,
@@ -170,6 +171,7 @@ class TestR1Counterexamples:
 def ctx() -> MappingContext:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     lines = load_source_lines(str(SRC_MD))
+    manifest = inject_legacy_structure(manifest, lines)
     return MappingContext(
         lines=lines,
         manifest=manifest,

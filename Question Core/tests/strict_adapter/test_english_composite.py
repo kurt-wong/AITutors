@@ -23,6 +23,7 @@ from question_core.contracts.v1 import (  # noqa: E402
     Completeness,
     candidate_adapter,
 )
+from tests.strict_adapter.legacy_structure import inject_legacy_structure  # noqa: E402
 from strict_adapter.english_composite import (  # noqa: E402
     decode_compact_answer_key,
     decode_per_question_tokens,
@@ -402,10 +403,16 @@ class TestF2Condition5:
             assert probe["f2_condition5_recognizable"], uid
 
     def test_u3_minimal_counterexample(self, mapped):
-        """最小反例：多词子答案值使 _parse_composite_pairs 丢键 7、误出键 HAS。
+        """历史反例（多词子答案值）的现状态：解析器已可识别，fail-closed 不变。
 
-        该子题按 fail-closed 保持 incomplete；三选一（规范化裁定/保持现状/
-        改契约解析）留 Owner 裁决，本轮不选、不伪造 complete。
+        原记录：_parse_composite_pairs 丢键 7、误出键 HAS，三选一
+        （规范化裁定/保持现状/改契约解析）留 Owner 裁决。G4 阻断修复
+        （Owner QCORE-PHASE3-G4 指令 §6.1 最小修复授权）事实上选定
+        「改契约解析」：新解析器对多词子答案值确定性切分，键 7-10 可识别。
+
+        不变量（本用例继续锁定）：该单元 completeness 仍为 incomplete
+        （transport completeness=unknown，P-2 不得提升），不因解析器
+        修复而伪造 complete。
         """
         m = mapped["U3"]
         assert m.completeness == "incomplete"
@@ -415,9 +422,9 @@ class TestF2Condition5:
         probe = f2_condition5_probe(
             [(p["label"], p["value"]) for p in m.log["answer_decode"]["pairs"]]
         )
-        assert probe["f2_condition5_recognizable"] is False
-        assert "7" not in probe["parsed_keys"]
-        assert "HAS" in probe["parsed_keys"]
+        assert probe["f2_condition5_recognizable"] is True
+        assert {"7", "8", "9", "10"} <= set(probe["parsed_keys"])
+        assert "HAS" not in probe["parsed_keys"]
 
     def test_complete_claim_never_made_for_u1_u4(self, mapped):
         # transport completeness=unknown（P-2 不得提升）→ U1-U4 恒 incomplete
@@ -516,12 +523,17 @@ class TestRegressionGuard:
     # → content_hash 有意变化。本守卫的**主断言**（不被英语分支劫持：路径/
     # sub_specs 检查）不变。旧 C-R2 基线（2026-11 前）：
     #   Q5 90b72cd8…  Q6 004487a8…  Q8 9b7fd0a4…  Q9 46a7c73a…  Q10 253b5db1…
+    # G3-B B2 契约迁移重定基线（M1 先例：有意变更须带因由）：mapper 退出二次识别后，
+    # QuestionBody/Material.note 改为「结构声明来源」的准确表述（旧 note 会宣称
+    # 正则按印刷标签切分）。**内容块文本与 C-R2 基线逐字节一致**（stem/block 拼接
+    # 经 diff 核验无差异），answers 绑定不变——content_hash 漂移仅来自 note 元数据。
+    # 语义断言（path != english_composite / 无 sub_specs / 不劫持）不变。
     CHN_EXPECTED_HASHES = {
-        "Q5": "0a913627a9575a77a1c2dad05b86a9c730e649d0679525c1966ed062d1160c7a",
-        "Q6": "dce8b1e875cecf63237775838cb21d5cdd192107b147ef7369107ae02736b097",
-        "Q8": "af4b01eebe4e451bb6af47e9b04d64030c76ae9fa6d59712d5e169766a3c1360",
-        "Q9": "2959b0852a1363890f400f7123a0b6490263a164a43a979507f778ddc170e8a3",
-        "Q10": "556aadb242e6d4b4a59b2fa66b631ce799288f8e9231c382221a519a58c89a80",
+        "Q5": "4fd50b0ec673cba725e5e8a3819165251dcced5899a774159f1e0b5abca75473",
+        "Q6": "01e08c3a8c609995a4c64338ef3c00174fe64c642e048ae7b32b28dc5a7075ee",
+        "Q8": "76d86d4572cc13f39141659cfae01f3b901d6b0d948bdfab120077f7067001b6",
+        "Q9": "0e033f4bf4628c194a856f3e3c03eaa96bd258f0678fc031f95d53b250300ae4",
+        "Q10": "e23281c670b174754593a0dcc0a0431541d3359349948c16bc85952bfe66ed21",
     }
 
     @pytest.fixture(scope="class")
@@ -530,6 +542,7 @@ class TestRegressionGuard:
 
         manifest = json.loads(self.CHN_MANIFEST.read_text(encoding="utf-8"))
         lines = load_source_lines(str(self.CHN_MD))
+        manifest = inject_legacy_structure(manifest, lines)
         return MappingContext(
             lines=lines,
             manifest=manifest,
@@ -610,6 +623,7 @@ class TestRegressionGuard:
                 / "2020全国I卷高考真题化学（教师版）(1).md"
             )
         )
+        manifest = inject_legacy_structure(manifest, lines)
         ctx = MappingContext(
             lines=lines,
             manifest=manifest,

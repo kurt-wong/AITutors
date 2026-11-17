@@ -23,6 +23,7 @@ from question_core.contracts.v1 import (  # noqa: E402
     Completeness,
     candidate_adapter,
 )
+from tests.strict_adapter.legacy_structure import inject_legacy_structure  # noqa: E402
 from strict_adapter.extract import load_source_lines  # noqa: E402
 from strict_adapter.mapper import MappingContext, map_all  # noqa: E402
 
@@ -68,6 +69,7 @@ def _build_mappings(paper: str) -> dict:
     assert manifest.is_file() and src_md.is_file(), (manifest, src_md)
     assert _sha(manifest) == spec["manifest_sha"], f"{paper} sealed manifest changed"
     data = json.loads(manifest.read_text(encoding="utf-8"))
+    data = inject_legacy_structure(data, load_source_lines(str(src_md)))
     ctx = MappingContext(
         lines=load_source_lines(str(src_md)),
         manifest=data,

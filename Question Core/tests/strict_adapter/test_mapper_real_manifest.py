@@ -28,6 +28,7 @@ from question_core.contracts.v1 import (  # noqa: E402
     Completeness,
     candidate_adapter,
 )
+from tests.strict_adapter.legacy_structure import inject_legacy_structure  # noqa: E402
 from strict_adapter.extract import load_source_lines  # noqa: E402
 from strict_adapter.mapper import MappingContext, map_all  # noqa: E402
 
@@ -81,6 +82,7 @@ def mappings():
     )
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     lines = load_source_lines(str(SRC_MD))
+    manifest = inject_legacy_structure(manifest, lines)
     ctx = MappingContext(
         lines=lines,
         manifest=manifest,

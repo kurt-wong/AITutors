@@ -117,8 +117,8 @@ class TestExtractOptions:
         opts = [
             OptionSpec(label=l, start=1, end=1) for l in ("A", "B", "C", "D")
         ]
-        out, table = extract_options(lines, opts)
-        assert table is not None
+        out, tables = extract_options(lines, opts)
+        assert tables
         assert [o["label"] for o in out] == ["A", "B", "C", "D"]
         texts = ["".join(b["text"] for b in o["blocks"]) for o in out]
         assert texts[0] == "A内容A"
@@ -127,8 +127,8 @@ class TestExtractOptions:
     def test_independent_ranges(self):
         lines = ["A. 甲", "", "B. 乙"]
         opts = [OptionSpec(label="A", start=1, end=1), OptionSpec(label="B", start=3, end=3)]
-        out, table = extract_options(lines, opts)
-        assert table is None
+        out, tables = extract_options(lines, opts)
+        assert not tables
         assert out[0]["blocks"][0]["text"] == "A. 甲"
         assert out[1]["blocks"][0]["text"] == "B. 乙"
 
@@ -136,8 +136,8 @@ class TestExtractOptions:
         """R1 B1 反例：同行四选项（含特殊符号）须逐项正确切分+同行定位。"""
         lines = ["A. ①③②④⑥⑤ B. ①④②③⑥⑤ C. ②①④③⑥⑤ D. ②③④①⑤⑥"]
         opts = [OptionSpec(label=l, start=1, end=1) for l in ("A", "B", "C", "D")]
-        out, table = extract_options(lines, opts)
-        assert table is None
+        out, tables = extract_options(lines, opts)
+        assert not tables
         assert [o["label"] for o in out] == ["A", "B", "C", "D"]
         assert [o["blocks"][0]["text"] for o in out] == [
             "①③②④⑥⑤", "①④②③⑥⑤", "②①④③⑥⑤", "②③④①⑤⑥",
@@ -158,7 +158,7 @@ class TestExtractOptions:
     def test_shared_inline_multi_line_region(self):
         lines = ["A. 甲 B. 乙", "", "C. 丙 D. 丁"]
         opts = [OptionSpec(label=l, start=1, end=3) for l in ("A", "B", "C", "D")]
-        out, table = extract_options(lines, opts)
+        out, tables = extract_options(lines, opts)
         assert [o["blocks"][0]["text"] for o in out] == ["甲", "乙", "丙", "丁"]
         locs = [(o["blocks"][0]["line_start"], o["blocks"][0]["line_end"]) for o in out]
         assert locs == [(1, 1), (1, 1), (3, 3), (3, 3)]

@@ -338,9 +338,15 @@ class CompositeAnswer(AnswerBase):
 
     @model_validator(mode="after")
     def _unique_labels(self) -> "CompositeAnswer":
-        labels = [s.sub_label for s in self.answer_value]
-        if len(labels) != len(set(labels)):
-            raise ValueError("composite sub-labels must be unique")
+        # G4-R1 R1-04：唯一性以（印刷标签, 正文节点）身份对为准。
+        # 同题不同层级可有相同印刷标签（如两处 ①），sub_body_local_id 区分；
+        # 纯标签唯一性会迫使错绑或伪造标签。
+        keys = [(s.sub_label, s.sub_body_local_id) for s in self.answer_value]
+        if len(keys) != len(set(keys)):
+            raise ValueError(
+                "composite sub-labels must be unique per body "
+                "(sub_label + sub_body_local_id)"
+            )
         return self
 
 

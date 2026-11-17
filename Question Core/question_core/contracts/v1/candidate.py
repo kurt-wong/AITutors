@@ -504,6 +504,41 @@ def _norm_label(label: str) -> str:
     return _norm(label).strip().upper()
 
 
+_CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"
+
+
+def _circled_to_digit(ch: str) -> str:
+    idx = _CIRCLED.find(ch)
+    return str(idx + 1) if 0 <= idx < len(_CIRCLED) else ch
+
+
+# 印刷标记（确定性形态，三类）：
+#   (1) / （1）/ (1). —— 括号数字（可选尾点）
+#   1. / 10、        —— 数字 + 标点
+#   ①. / ①          —— 圈数字（可选尾点）
+# 前置边界：行首 / 空白 / 右括号；排除小数（1.5 不作标记）。
+import re as _re
+
+_MARKER_RE = _re.compile(
+    r"(?:^|(?<=[\s)）]))"
+    r"(?:"
+    r"[（(]\s*(\d{1,2}|[①-⑳])\s*[)）](?:[.．、,:：;；。](?!\d))?"
+    r"|(\d{1,2})(?:[.．、,:：;；。](?!\d))"
+    r"|[①-⑳](?:[.．、,:：;；。](?!\d))?"
+    r")"
+)
+
+
+def _find_markers(text: str) -> list[tuple[int, int, str]]:
+    """返回 [(start, end, key)]；key 为圈/半角数字归一后的序号字符串。"""
+    out = []
+    for m in _MARKER_RE.finditer(text):
+        key = next((g for g in m.groups() if g), m.group(0).strip("（()）.．、:： 　"))
+        key = "".join(_circled_to_digit(c) for c in key)
+        out.append((m.start(), m.end(), key))
+    return out
+
+
 def _parse_choice_labels(text: str) -> set[str]:
     """Extract the set of choice labels from a declared value.
 
@@ -517,21 +552,19 @@ def _parse_choice_labels(text: str) -> set[str]:
 def _parse_blank_items(text: str, expected_count: int) -> list[str] | None:
     """Parse fill-blank answer items from a declared value.
 
-    Supports numbered formats ``(1).B (2).D`` / ``1. B; 2. D`` and simple
-    delimited formats ``B,D,A,C``.  Returns ``None`` when the declared
-    string cannot be split into *exactly* ``expected_count`` items.
+    Supports numbered formats ``(1).B (2).D`` / ``1. B; 2. D`` / ``①. x ②. y``
+    and simple delimited formats ``B,D,A,C``.  Returns ``None`` when the
+    declared string cannot be split into *exactly* ``expected_count`` items.
     """
-    import re
-
     normalised = _norm(text)
 
-    # Strategy 1: numbered markers  (1).X  /  1. X  /  1) X  /  （1）X
-    marker_re = re.compile(
-        r"[(（]?\s*(\d+)\s*[)）]?\s*[.．、:：]?\s*(.+?)(?=[(（]?\s*\d+\s*[)）]?\s*[.．、:：]|$)"
-    )
-    pairs = marker_re.findall(normalised)
-    if len(pairs) == expected_count:
-        items = [v.strip() for _, v in pairs]
+    # Strategy 1: printed markers（括号数字 / 数字点 / 圈数字）
+    marks = _find_markers(normalised)
+    if marks and len(marks) == expected_count:
+        items = []
+        for i, (_s, e, _k) in enumerate(marks):
+            end = marks[i + 1][0] if i + 1 < len(marks) else len(normalised)
+            items.append(normalised[e:end].strip())
         if all(items):
             return items
 
@@ -557,36 +590,35 @@ def _parse_blank_items(text: str, expected_count: int) -> list[str] | None:
 def _parse_composite_pairs(text: str) -> dict[str, str] | None:
     """Parse ``key.answer`` pairs from a composite declared value.
 
-    Handles ``"9.D 10.B"``, ``"(1).A (2).C"`` etc.  Returns a dict mapping
+    Handles ``"9.D 10.B"``, ``"(1).A (2).C"``, ``"（1）A （2）D"`` and
+    multi-token values (``"（2）$ p = ... $"``).  Returns a dict mapping
     normalised key → answer string, or ``None`` when parsing fails.
     """
-    import re
-
     normalised = _norm(text)
-    pair_re = re.compile(
-        r"[(（]?\s*([A-Za-z0-9]+)\s*[)）]?\s*[.．、:：]?\s*(\S+?)(?=\s+[(（]?\s*[A-Za-z0-9]+\s*[)）]?\s*[.．、:：]|$)"
-    )
-    pairs = pair_re.findall(normalised)
-    if not pairs:
+    marks = _find_markers(normalised)
+    if not marks:
         return None
     result: dict[str, str] = {}
-    for key, value in pairs:
-        norm_key = _norm_label(key) if len(key) <= 3 else _norm(key)
+    for i, (_s, e, key) in enumerate(marks):
+        end = marks[i + 1][0] if i + 1 < len(marks) else len(normalised)
+        value = normalised[e:end].strip()
+        if not value:
+            return None
+        norm_key = _norm_composite_key(key)
         if norm_key in result:
             return None  # duplicate key → ambiguous
-        result[norm_key] = value.strip()
+        result[norm_key] = value
     return result
 
 
 def _norm_composite_key(key: str) -> str:
     """Normalise a composite sub-question key.
 
-    ``(1)`` → ``1``; ``9`` → ``9``; ``(10)`` → ``10``.
+    ``(1)`` → ``1``; ``9`` → ``9``; ``①`` → ``1``; ``(10)`` → ``10``.
     """
-    import re
-
-    m = re.search(r"(\d+)", _norm(key))
-    return m.group(1) if m else _norm(key).upper()
+    folded = "".join(_circled_to_digit(c) for c in _norm(key))
+    m = _re.search(r"(\d+)", folded)
+    return m.group(1) if m else folded.upper()
 
 
 def _answer_matches_declared(answer, declared_norm: str) -> bool:
@@ -604,6 +636,11 @@ def _answer_matches_declared(answer, declared_norm: str) -> bool:
 
     if atype == "fill_blank":
         blanks = tuple(answer.answer_value)
+        # 有序拼接全等（G4-F1）：未分段 declared 串按空格连接各空值后与
+        # declared 完全一致 → 视为全覆盖（仍为逐字符全等，无猜测）。
+        if all(isinstance(b, str) for b in blanks):
+            if _norm(" ".join(blanks)) == declared_norm:
+                return True
         items = _parse_blank_items(declared_norm, len(blanks))
         if items is None:
             return False
@@ -642,7 +679,9 @@ def _answer_matches_declared(answer, declared_norm: str) -> bool:
         return _answer_matches_declared(answer.answer_value, declared_norm)
 
     if atype == "composite":
-        return _match_composite(answer, declared_norm)
+        return _match_composite(answer, declared_norm) or _match_composite_flat(
+            answer, declared_norm
+        )
 
     if atype == "multi_step":
         return _match_multi_step(answer, declared_norm)
@@ -687,6 +726,44 @@ def _match_composite(answer, declared_norm: str) -> bool:
         if not _answer_matches_declared(sub, _norm(declared_val)):
             return False
     return True
+
+
+def _flatten_answer_values(answer) -> list:
+    """把答案树展开为叶子值的有序列表（fill_blank 逐空展开）。
+
+    仅用于有序全等兜底（G4-F3）；含 None/AssetSlot 的叶子由调用方放弃兜底。
+    """
+    atype = getattr(answer, "answer_type", None)
+    value = getattr(answer, "answer_value", None)
+    if atype in ("composite",):
+        out: list = []
+        for sub in value or ():
+            out.extend(_flatten_answer_values(sub))
+        return out
+    if atype == "composite_sub":
+        return _flatten_answer_values(value) if value is not None else [None]
+    if atype in ("fill_blank", "multi_choice", "multi_step"):
+        return list(value or ())
+    return [value]
+
+
+def _match_composite_flat(answer, declared_norm: str) -> bool:
+    """键位解析失败/键集不齐时的有序全等兜底（G4-F3）。
+
+    典型场景：declared 用 ①-⑤ 标记的是**答案槽位**（跨小问），而子问键是
+    （1）-（3）。规则：展开全部叶子值（含多空拆分），按印刷标记/分隔符把
+    declared 切成等量片段，逐片段与对应叶子**完全相等**才成立；任何
+    None/AssetSlot 叶子或切分失败都不兜底。不改变键位路径的既有判定。
+    """
+    leaves = _flatten_answer_values(answer)
+    if not leaves or any(
+        v is None or isinstance(v, AssetSlot) or not isinstance(v, str) for v in leaves
+    ):
+        return False
+    items = _parse_blank_items(declared_norm, len(leaves))
+    if items is None or len(items) != len(leaves):
+        return False
+    return all(_norm(item) == _norm(leaf) for item, leaf in zip(items, leaves))
 
 
 def _match_multi_step(answer, declared_norm: str) -> bool:

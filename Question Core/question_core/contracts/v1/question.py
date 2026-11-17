@@ -206,8 +206,16 @@ class QuestionAggregate(ContractModel):
     def published_revision(self) -> Revision | None:
         from .state import PublicationState
 
+        # 当前生命周期状态的唯一权威是 state_history（见 persistence.repository
+        # append_state_snapshot 契约注释）；Revision.state 是创建时快照且因
+        # 不可变性永不更新，不能单独作为发布判定源。有历史快照时以历史为准，
+        # 无历史时回退创建快照（内存装配场景）。
+        latest_by_rev = {}
+        for snap in self.state_history:
+            latest_by_rev[snap.revision_id] = snap
         for rev in self.revisions:
-            if rev.state is not None and rev.state.publication == PublicationState.PUBLISHED:
+            snap = latest_by_rev.get(rev.revision_id, rev.state)
+            if snap is not None and snap.publication == PublicationState.PUBLISHED:
                 return rev
         return None
 

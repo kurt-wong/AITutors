@@ -11,16 +11,34 @@ tests/persistence/integration/test_generic_executor_pg.py.
 from __future__ import annotations
 
 import json
+import tempfile
 import os
 import sys
 from pathlib import Path
 
 import pytest
 
+
+
+_MIG_DIR = Path(tempfile.mkdtemp(prefix="g3b2_mig_"))
+
+
+def _mig(manifest_path, md_path):
+    """夹具迁移：封存 manifest → tmp 副本 + 结构声明注入（G3-B B2 契约）。"""
+    key = str(manifest_path)
+    out = _MIG_DIR / Path(manifest_path).name
+    if not out.is_file():
+        data = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        inject_legacy_structure(data, load_source_lines(str(md_path)))
+        out.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return out
+
 _QCORE_ROOT = Path(__file__).resolve().parents[2]
 if str(_QCORE_ROOT) not in sys.path:
     sys.path.insert(0, str(_QCORE_ROOT))
 
+from tests.strict_adapter.legacy_structure import inject_legacy_structure  # noqa: E402
+from strict_adapter.extract import load_source_lines  # noqa: E402
 from strict_adapter.generic_executor import (  # noqa: E402
     DatabaseTargetError,
     DEFAULT_FORBIDDEN_DBS,
@@ -188,7 +206,7 @@ class TestBuildContext:
         p = PaperInput(
             paper_id="2020全国I卷高考真题化学（教师版）(1)",
             subject="化学",
-            manifest_path=CHEM_MANIFEST,
+            manifest_path=_mig(CHEM_MANIFEST, CHEM_MD),
             source_md_path=CHEM_MD,
             source_pdf_path=CHEM_PDF,
             annotated_md_path=CHEM_ANN if CHEM_ANN.is_file() else None,
@@ -224,7 +242,7 @@ class TestDryRunOrchestration:
             PaperInput(
                 paper_id="2020全国I卷高考真题化学（教师版）(1)",
                 subject="化学",
-                manifest_path=CHEM_MANIFEST,
+                manifest_path=_mig(CHEM_MANIFEST, CHEM_MD),
                 source_md_path=CHEM_MD,
                 source_pdf_path=CHEM_PDF,
                 annotated_md_path=None,
@@ -247,12 +265,12 @@ class TestDryRunOrchestration:
         papers = [
             PaperInput(
                 paper_id="2020全国I卷高考真题化学（教师版）(1)", subject="化学",
-                manifest_path=CHEM_MANIFEST, source_md_path=CHEM_MD,
+                manifest_path=_mig(CHEM_MANIFEST, CHEM_MD), source_md_path=CHEM_MD,
                 source_pdf_path=CHEM_PDF, annotated_md_path=None,
             ),
             PaperInput(
                 paper_id="2019江苏高考真题语文（教师版）(1)", subject="语文",
-                manifest_path=CHN_MANIFEST, source_md_path=CHN_MD,
+                manifest_path=_mig(CHN_MANIFEST, CHN_MD), source_md_path=CHN_MD,
                 source_pdf_path=CHN_PDF, annotated_md_path=None,
             ),
         ]
@@ -280,7 +298,7 @@ class TestDryRunOrchestration:
             ),
             PaperInput(
                 paper_id="2020全国I卷高考真题化学（教师版）(1)", subject="化学",
-                manifest_path=CHEM_MANIFEST, source_md_path=CHEM_MD,
+                manifest_path=_mig(CHEM_MANIFEST, CHEM_MD), source_md_path=CHEM_MD,
                 source_pdf_path=CHEM_PDF, annotated_md_path=None,
             ),
         ]
@@ -412,12 +430,12 @@ class TestManifestSourceBinding:
         tampered.write_bytes(CHEM_MD.read_bytes() + b"\n# tampered\n")
         papers = [
             PaperInput(
-                paper_id="坏绑定卷", subject="化学", manifest_path=CHEM_MANIFEST,
+                paper_id="坏绑定卷", subject="化学", manifest_path=_mig(CHEM_MANIFEST, CHEM_MD),
                 source_md_path=tampered, source_pdf_path=CHEM_PDF, annotated_md_path=None,
             ),
             PaperInput(
                 paper_id="2020全国I卷高考真题化学（教师版）(1)", subject="化学",
-                manifest_path=CHEM_MANIFEST, source_md_path=CHEM_MD,
+                manifest_path=_mig(CHEM_MANIFEST, CHEM_MD), source_md_path=CHEM_MD,
                 source_pdf_path=CHEM_PDF, annotated_md_path=None,
             ),
         ]
@@ -477,17 +495,17 @@ class TestUrlOverrideAndCli:
         papers = [
             PaperInput(
                 paper_id="2020全国I卷高考真题化学（教师版）(1)", subject="化学",
-                manifest_path=CHEM_MANIFEST, source_md_path=CHEM_MD,
+                manifest_path=_mig(CHEM_MANIFEST, CHEM_MD), source_md_path=CHEM_MD,
                 source_pdf_path=CHEM_PDF, annotated_md_path=None,
             ),
             PaperInput(
                 paper_id="2019江苏高考真题语文（教师版）(1)", subject="语文",
-                manifest_path=CHN_MANIFEST, source_md_path=CHN_MD,
+                manifest_path=_mig(CHN_MANIFEST, CHN_MD), source_md_path=CHN_MD,
                 source_pdf_path=CHN_PDF, annotated_md_path=None,
             ),
             PaperInput(
                 paper_id="2019北京高考真题英语（教师版）(1)", subject="英语",
-                manifest_path=ENG_MANIFEST, source_md_path=ENG_MD,
+                manifest_path=_mig(ENG_MANIFEST, ENG_MD), source_md_path=ENG_MD,
                 source_pdf_path=ENG_PDF, annotated_md_path=None,
             ),
         ]
