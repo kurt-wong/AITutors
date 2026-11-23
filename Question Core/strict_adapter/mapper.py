@@ -3531,19 +3531,42 @@ def _merge_extras_and_figures(
             for m in (unit.get("materials") or [])
         ]
         if (not stem) or stem in present:
-            # S02 R1 C6: the figure is already carried by the material blocks.
-            # Honouring the sub-question declaration would require restructuring
-            # the material carrier (R2 boundary), so keep the carrier but record
-            # the declaration explicitly — never a silent override.
+            # S02 R2: an asset physically inside a material block is owned by
+            # that material (physical carrier); a non-empty applies_to declares
+            # which sub-questions consume it.  Consumers must reference the
+            # carrier via materials_used; otherwise the declaration is recorded
+            # as a data mismatch instead of being silently ignored.
             if stem and applies and ls and _in(mat_ranges):
-                _key = f"figure_applies_to_material_carried:{stem}"
+                carriers = [
+                    m.get("material_id")
+                    for m in (unit.get("materials") or [])
+                    if isinstance(m.get("line_start"), int)
+                    and m["line_start"] <= ls <= int(m.get("line_end") or m["line_start"])
+                ]
+                subs_by_id = {s.get("sub_id"): s for s in (unit.get("sub_questions") or [])}
+                consumers = []
+                consumers_ok = True
+                for sid in applies:
+                    sq = subs_by_id.get(sid)
+                    used = (sq or {}).get("materials_used") or []
+                    ok = any(cid in used for cid in carriers)
+                    consumers_ok = consumers_ok and ok
+                    consumers.append(
+                        {"sub_id": sid, "materials_used": list(used), "carrier_ok": ok}
+                    )
+                _key = f"figure_material_carrier_owner:{stem}"
                 if _key not in log:
                     log[_key] = True
-                    log.setdefault("figure_applies_to_material_carried", []).append(
-                        {"asset_id": stem, "declared": list(applies),
-                         "carrier": "material",
-                         "reason": "asset_inside_material_range (R2 carrier; not restructured)"}
+                    log.setdefault("figure_material_carrier_owner", []).append(
+                        {"asset_id": stem, "carrier_materials": carriers,
+                         "declared_consumers": list(applies),
+                         "consumers": consumers, "consumers_ok": consumers_ok}
                     )
+                    if not consumers_ok:
+                        log.setdefault("figure_applies_to_consumer_mismatch", []).append(
+                            {"asset_id": stem, "carrier_materials": carriers,
+                             "declared_consumers": list(applies)}
+                        )
             continue
         if where.startswith("material:"):
             mid = where.split(":", 1)[1]
