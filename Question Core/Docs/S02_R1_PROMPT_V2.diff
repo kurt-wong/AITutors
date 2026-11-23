@@ -1,0 +1,21 @@
+--- prompt_v1_sealed.txt
++++ prompt_r1_llm_v2.txt
+@@ -129,4 +129,8 @@
+    "materials_used": ["M01"]（本小问依赖的材料 id；不依赖填 []，多对多）,
+    "answer_refs": ["(1)#1"]（指向 answers[].slot_id，可多条）,
++     —— **子问引用必须带子问标签**：父题下属子问的 answer_refs 写成 "(1)#1" 或
++     "13(1)#1"，禁止只写父题号（如 "13#1"）；每条 ref 必须与对应 answers[].slot_id
++     逐项同形（字面完全一致）。例：父题 13、子问（1）（2）→ answer_refs ["(1)#1"]、
++     ["(2)#1"]，对应 slot_id 同字面。
+    "figure_refs": ["F1"]（指向 figures[].figure_id）,
+    "answer_entry_count": 1（本小问最小可答项数 = 归属本小问的 answers 条目数；
+@@ -155,4 +159,9 @@
+      → triage=explicit_grouping。gt_conflict 是独立冲突登记状态（与题库 GT 边界冲突时置
+      true），**不是** triage 取值。
++   - **basis 取值收口（必须遵守）**：composite 的 basis 默认只写 ["A"]。
++     仅当 grouping_statements 中存在 triage=explicit_grouping **且 covered_range 非 null**
++     的声明时，才允许追加 "B"。凡 triage=shared_dependency / section_count_only，
++     或 covered_range 为 null（如“阅读下面的文字，完成下面小题”只建立共用前提、未点名
++     覆盖范围），一律不得写 B；不得输出 ["A","B"] 之类组合。
+    materials[]（unit 内多材料；一问多料/多问一料/不同问不同料/无料均可）：
+    [{"material_id": "M01", "label": "材料一" 或 null, "line_start": 起, "line_end": 止}]

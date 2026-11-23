@@ -2519,6 +2519,19 @@
           ],
           "default": null,
           "title": "Line End"
+        },
+        "source_label": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Label"
         }
       },
       "required": [
@@ -4124,6 +4137,19 @@
           "minLength": 1,
           "title": "Source Document Id",
           "type": "string"
+        },
+        "paper_segment_id": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paper Segment Id"
         },
         "printed_number": {
           "anyOf": [

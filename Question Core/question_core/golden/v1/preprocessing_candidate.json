@@ -55,7 +55,8 @@
               ],
               "label": "A",
               "line_end": 15,
-              "line_start": 15
+              "line_start": 15,
+              "source_label": null
             },
             {
               "blocks": [
@@ -68,7 +69,8 @@
               ],
               "label": "B",
               "line_end": 15,
-              "line_start": 15
+              "line_start": 15,
+              "source_label": null
             }
           ],
           "parent_question_ref": null,

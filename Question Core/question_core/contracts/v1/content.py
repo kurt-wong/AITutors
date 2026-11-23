@@ -210,6 +210,10 @@ class OptionItem(ContractModel):
     blocks: Annotated[tuple[ContentBlock, ...], Field(min_length=1)]
     line_start: int | None = Field(default=None, ge=1)
     line_end: int | None = Field(default=None, ge=1)
+    #: Printed question number carried by the source line (cloze style
+    #: ``21. A. …``).  Label stays A–D; the number is preserved here so source
+    #: identity is not lost (S02 R1 contract C4.3).
+    source_label: Annotated[str, Field(max_length=20)] | None = None
 
 
 class QuestionBody(ContractModel):

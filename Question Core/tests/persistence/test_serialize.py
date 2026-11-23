@@ -202,7 +202,9 @@ class TestSchemaBaselineUntouched:
         # 2026-11-23 QCORE-D9-C1-C2-01：QuestionInstance 增加可选
         # paper_segment_id（D9 C2 身份隔离必需；加性、可空、无 DDL），
         # schema 形状变化，经 Owner 任务指令授权后重生成基线。
+        # 2026-11-23 QCORE-S02-R1 Stage 3：OptionItem 增加可选
+        # source_label（完形 `N. A.` 题号保真，Owner A2；加性、可空、无 DDL）。
         expected = (
-            "ad64e48383643e237b562ee722988cc1390123b05750f2f1a3687f9c1abf389d"
+            "8a07480ebc191484621a5c29582203374d10613855ff052f3e68599ce0f9b309"
         )
         assert compute_schema_hash(build_json_schema()) == expected

@@ -2745,6 +2745,239 @@ def _gap_ranges(qrange: tuple[int, int], covered: list[tuple[int, int]]) -> list
     return lead
 
 
+
+
+# ---------------------------------------------------------------------------
+# S02 R1 (Stage 3): composite option groups — owner-scoped parsing
+# ---------------------------------------------------------------------------
+
+_OPT_LABEL_START = re.compile(r"^\s*([A-H])\s*[.．、:：]\s*")
+_OPT_NUMBERED_START = re.compile(r"^\s*(\d{1,2})\s*[.．、]\s+")
+_OPT_INLINE_LABEL = re.compile(r"(?:^|[\s)）])([A-H])\s*[.．、:：]\s*")
+
+
+def _parse_numbered_option_text(text: str):
+    """Parse ``A. … B. … C. … D. …`` from one cloze option line."""
+    marks = list(_OPT_INLINE_LABEL.finditer(text))
+    if not marks:
+        return None
+    labels = [m.group(1) for m in marks]
+    if labels != [chr(ord("A") + i) for i in range(len(labels))]:
+        return None
+    out = []
+    for i, m in enumerate(marks):
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
+        value = text[m.end():end].strip()
+        if not value:
+            return None
+        out.append({"label": m.group(1), "text": value})
+    return out
+
+
+def _label_of(option_label) -> str:
+    return str(option_label or "").strip().strip(" .．、（）()")
+
+
+def _sub_for_printed_number(subs, number: int):
+    for sq in subs or []:
+        if _label_of(sq.get("label")) == str(number):
+            return sq.get("sub_id")
+    return None
+
+
+def _composite_option_groups(unit, ctx, asset_sink, log):
+    """Return (unit_options, {sub_id: options}, used).
+
+    Owner rules (S02 R1 contract C4.2):
+    * option lines that carry a printed number (``21. A. …``) belong to the
+      sub-question whose label matches that number;
+    * a plain ``A. …`` group belongs to the single sub-question that fully
+      contains the region, otherwise to the unit (parent body);
+    * groups are never merged across owners.
+    """
+    region = unit.get("options_lines")
+    if not region or len(region) != 2:
+        return (), {}, False
+    if (ctx.subject or "").strip() != "英语":
+        return (), {}, False
+    os_, oe = int(region[0]), int(region[1])
+    lines = ctx.lines
+    subs = unit.get("sub_questions") or []
+    unit_id = unit.get("unit_id")
+
+    # ---- numbered style (cloze): one group per printed number ----
+    numbered = []
+    for ln in range(max(1, os_), min(len(lines), oe) + 1):
+        m = _OPT_NUMBERED_START.match(lines[ln - 1])
+        if not m:
+            continue
+        parsed = _parse_numbered_option_text(lines[ln - 1][m.end():])
+        if parsed:
+            numbered.append((int(m.group(1)), ln, parsed))
+    if numbered:
+        from question_core.contracts.v1 import OptionItem, TextBlock
+
+        by_sub: dict[str, list] = {}
+        unit_items: list = []
+        for number, ln, specs in numbered:
+            sid = _sub_for_printed_number(subs, number)
+            items = [
+                OptionItem(
+                    label=sp["label"],
+                    blocks=(TextBlock(text=sp["text"], line_start=ln, line_end=ln),),
+                    line_start=ln,
+                    line_end=ln,
+                    source_label=str(number),
+                )
+                for sp in specs
+            ]
+            if sid is None:
+                log.setdefault("option_group_unowned", []).append(
+                    {"source_label": str(number), "line": ln, "owner": "unit"}
+                )
+                unit_items.extend(items)
+            else:
+                by_sub.setdefault(sid, []).extend(items)
+        log["composite_option_mode"] = "sub_options" if by_sub else "unit_options"
+        return tuple(unit_items), {k: tuple(v) for k, v in by_sub.items()}, True
+
+    # ---- plain label style (A. … B. …) ----
+    from .extract import OptionSpec, extract_options
+    from question_core.contracts.v1 import OptionItem, TextBlock
+
+    def _parse_plain_group(a: int, b: int):
+        # S02 R1: same-line option groups (``A. … B. …`` on one physical line)
+        # must be split into separate options; the line-start scan below would
+        # otherwise only see the first label of each line.
+        seg_text = "\n".join(lines[max(1, a) - 1:min(len(lines), b)])
+        inline_marks = list(_OPT_INLINE_LABEL.finditer(seg_text))
+        same_line = any(
+            len(_OPT_INLINE_LABEL.findall(ln)) >= 2
+            for ln in lines[max(1, a) - 1:min(len(lines), b)]
+        )
+        if same_line and len(inline_marks) >= 2:
+            inline_labels = [m.group(1) for m in inline_marks]
+            if inline_labels == [chr(ord("A") + i) for i in range(len(inline_labels))]:
+                parsed = []
+                for i, m in enumerate(inline_marks):
+                    end = inline_marks[i + 1].start() if i + 1 < len(inline_marks) else len(seg_text)
+                    raw_val = seg_text[m.end():end]
+                    val = raw_val.strip()
+                    if not val:
+                        return None
+                    lead = len(raw_val) - len(raw_val.lstrip())
+                    start_off = m.end() + lead
+                    last_off = start_off + len(val) - 1
+                    ls = max(1, a) + seg_text[:start_off].count("\n")
+                    le = max(1, a) + seg_text[:last_off].count("\n")
+                    parsed.append(
+                        {
+                            "label": inline_labels[i],
+                            "blocks": [{"kind": "text", "text": val,
+                                        "line_start": ls, "line_end": le}],
+                            "line_start": ls,
+                            "line_end": le,
+                        }
+                    )
+                return parsed
+        found: dict[str, int] = {}
+        for ln in range(max(1, a), min(len(lines), b) + 1):
+            m = _OPT_LABEL_START.match(lines[ln - 1])
+            if m and m.group(1) not in found:
+                found[m.group(1)] = ln
+        labels = sorted(found)
+        if not labels:
+            return None
+        starts = sorted(found.values())
+        specs = [
+            OptionSpec(
+                label=lb, start=found[lb],
+                end=min((x for x in starts if x > found[lb]), default=b + 1) - 1,
+            )
+            for lb in labels
+        ]
+        clamped = _clamp_option_spans(
+            [{"label": sp.label, "start": sp.start, "end": sp.end} for sp in specs],
+            ctx.lines, log, unit_id,
+        )
+        specs = [OptionSpec(label=c["label"], start=c["start"], end=c["end"]) for c in clamped]
+        raw, _tables = extract_options(ctx.lines, specs, region=(a, b))
+        raw = _dedupe_option_text(raw, log, unit_id, ctx.lines, [a, b])
+        if not raw:
+            return None
+        covered = set()
+        for o in raw:
+            x = o.get("line_start") or a
+            y = o.get("line_end") or x
+            covered.update(range(int(x), int(y) + 1))
+        expected = set()
+        for sp in specs:
+            expected.update(range(int(sp.start), int(sp.end) + 1))
+        if not expected.issubset(covered):
+            return None
+        return raw
+
+    def _items_from_raw(raw):
+        items = []
+        for o in raw:
+            blocks = list(
+                _blocks_from_raw(
+                    o["blocks"], asset_sink, ctx, f"{str(unit_id).lower()}-options", log
+                )
+            )
+            if blocks and getattr(blocks[0], "kind", "") == "text":
+                txt = getattr(blocks[0], "text", "") or ""
+                pref = re.match(r"^\s*[A-H]\s*[.．、:：]\s*", txt)
+                if pref:
+                    blocks[0] = TextBlock(
+                        text=txt[pref.end():],
+                        line_start=getattr(blocks[0], "line_start", None),
+                        line_end=getattr(blocks[0], "line_end", None),
+                    )
+            items.append(
+                OptionItem(
+                    label=o["label"],
+                    blocks=tuple(blocks),
+                    line_start=o.get("line_start"),
+                    line_end=o.get("line_end"),
+                )
+            )
+        return tuple(items)
+
+    # S02 R1 C4.2: when the declared region spans several sub-questions, each
+    # sub-question owns the option lines that fall inside its own range.
+    overlapping = [
+        sq for sq in subs
+        if not (int(sq["line_end"]) < os_ or int(sq["line_start"]) > oe)
+    ]
+    if len(overlapping) >= 2:
+        by_sub = {}
+        for sq in overlapping:
+            a = max(os_, int(sq["line_start"]))
+            b = min(oe, int(sq["line_end"]))
+            raw_sub = _parse_plain_group(a, b)
+            if raw_sub:
+                by_sub[sq["sub_id"]] = _items_from_raw(raw_sub)
+        if by_sub:
+            log["composite_option_mode"] = "sub_options"
+            return (), by_sub, True
+
+    raw = _parse_plain_group(os_, oe)
+    if not raw:
+        log["composite_option_mode"] = "none"
+        return (), {}, False
+    items = _items_from_raw(raw)
+    inside = [
+        sq for sq in subs
+        if int(sq["line_start"]) <= os_ and oe <= int(sq["line_end"])
+    ]
+    if len(inside) == 1:
+        log["composite_option_mode"] = "sub_options"
+        return (), {inside[0].get("sub_id"): items}, True
+    log["composite_option_mode"] = "unit_options"
+    return items, {}, True
+
+
 def _composite_bodies_and_materials(
     unit: dict, ctx: MappingContext, asset_sink: list, log: dict
 ):
@@ -2844,60 +3077,15 @@ def _composite_bodies_and_materials(
         materials.append(mat)
         mat_by_id[mid] = mat
 
-    # ---- M3: composite options_lines -> an explicit options body ----
-    # Manifest already declares the option region.  Keep the region out of the
-    # parent stem, parse labels deterministically, and emit the options once in
-    # a body sorted at the option region's source line.
+    # ---- M3: composite options_lines -> owner-scoped option groups ----
+    # S02 R1 C4: unit-level groups render with the parent (after materials);
+    # sub-level groups render with their own sub-question.  Groups are never
+    # merged across owners, and cloze ``N. A. …`` lines keep the printed
+    # number in ``source_label``.
     _opt_region = unit.get("options_lines")
-    _opt_raw = []
-    _opt_specs = []
-    if (ctx.subject or "").strip() == "英语" and _opt_region and len(_opt_region) == 2:
-        from .extract import OptionSpec, extract_options
-        _os, _oe = int(_opt_region[0]), int(_opt_region[1])
-        _found = {}
-        for _ln in range(max(1, _os), min(len(ctx.lines), _oe) + 1):
-            _m = re.match(r"\s*([A-H])\s*[.．、:：]", ctx.lines[_ln - 1])
-            if _m and _m.group(1) not in _found:
-                _found[_m.group(1)] = _ln
-        _labels = sorted(_found)
-        if _labels:
-            _starts = sorted(_found.values())
-            for _lb in _labels:
-                _st = _found[_lb]
-                _nxt = min((x for x in _starts if x > _st), default=_oe + 1)
-                _opt_specs.append(OptionSpec(label=_lb, start=_st, end=_nxt - 1))
-            # Owner 2026-11-22（D2）：最后一个选项不得延伸到下一小问/下一题的
-            # 标记行；否则选项会把后续小问的题干与选项一起吞进来（学生端可见重复）。
-            _clamped = _clamp_option_spans(
-                [{"label": s.label, "start": s.start, "end": s.end} for s in _opt_specs],
-                ctx.lines,
-                log,
-                unit.get("unit_id"),
-            )
-            _opt_specs = [
-                OptionSpec(label=c["label"], start=c["start"], end=c["end"]) for c in _clamped
-            ]
-            _opt_raw, _shared_tables = extract_options(ctx.lines, _opt_specs, region=(_os, _oe))
-            _opt_raw = _dedupe_option_text(_opt_raw, log, unit.get("unit_id"), ctx.lines, unit.get("options_lines"))
-            if _opt_raw:
-                _covered = set()
-                for _o in _opt_raw:
-                    _a = _o.get("line_start") or _os
-                    _b = _o.get("line_end") or _a
-                    _covered.update(range(int(_a), int(_b) + 1))
-                _expected = set()
-                for _sp in _opt_specs:
-                    _expected.update(range(int(_sp.start), int(_sp.end) + 1))
-                if not _expected.issubset(_covered):
-                    # Not all declared option lines are covered by parsed
-                    # options; keep the original parent-stem behaviour rather
-                    # than dropping source lines (fail-open for content).
-                    log["composite_option_mode"] = "fallback_parent_stem"
-                    _opt_raw = []
-                else:
-                    log["composite_option_mode"] = "options_body"
-            else:
-                log["composite_option_mode"] = "none"
+    _unit_options, _sub_options, _opt_used = _composite_option_groups(
+        unit, ctx, asset_sink, log
+    )
 
     # ---- sub_questions 树 → 实体/层级 ----
     sub_by_id: dict[str, dict] = {}
@@ -2935,7 +3123,7 @@ def _composite_bodies_and_materials(
     # ---- 父体 stem = questions_lines −（小问区 ∪ 材料区）的最大间隙 ----
     covered = [(sub_by_id[s]["line_start"], sub_by_id[s]["line_end"]) for s in sub_order]
     covered += [(m.line_start, m.line_end) for m in materials]
-    if _opt_raw and _opt_region and len(_opt_region) == 2:
+    if _opt_used and _opt_region and len(_opt_region) == 2:
         covered += [(int(_opt_region[0]), int(_opt_region[1]))]
     lead = _gap_ranges((qrange[0], qrange[1]), covered)
 
@@ -3011,7 +3199,7 @@ def _composite_bodies_and_materials(
         excl_ranges = list(kid_ranges) + [
             (int(m.line_start), int(m.line_end)) for m in materials
         ]
-        if _opt_raw and _opt_region and len(_opt_region) == 2:
+        if _opt_used and _opt_region and len(_opt_region) == 2:
             excl_ranges.append((int(_opt_region[0]), int(_opt_region[1])))
         if excl_ranges:
             raw_r: list = []
@@ -3037,21 +3225,32 @@ def _composite_bodies_and_materials(
         # 其正文就是材料本身——正文只由 material 渲染一次，小问保留结构占位，
         # 否则完形/语法填空的整段 passage 会在每个小问里重复。
         if materials:
-            _mat_text = "".join(
-                "".join((getattr(b, "text", "") or "") for b in (m.blocks or []))
-                for m in materials
+            # S02 R1 C3: a sub-question fully inside a shared material is a
+            # blank inside the passage, not a second copy of it.  Judge by
+            # source-line containment (material text may be trimmed by sub
+            # ranges, so text-subset comparison is not reliable).
+            _inside_material = any(
+                int(m.line_start) <= s and e <= int(m.line_end) for m in materials
             )
-            _sub_text = "".join((b.get("text") or "") for b in sraw)
-            _norm_mat = re.sub(r"\s+", "", _mat_text)
-            _norm_sub = re.sub(r"\s+", "", _sub_text)
-            if _norm_sub and _norm_sub in _norm_mat:
+            if _inside_material:
                 sraw = [{"kind": "text", "text": "", "line_start": s, "line_end": s}]
                 log.setdefault("shared_material_sub_placeholders", []).append(sid)
-        if _opt_raw:
-            # 选项在同一 unit 内单独声明：小问题面里不得重复保留这些行。
+            else:
+                _mat_text = ''.join(
+                    ''.join((getattr(b, "text", "") or "") for b in (m.blocks or []))
+                    for m in materials
+                )
+                _sub_text = ''.join((b.get("text") or "") for b in sraw)
+                _norm_mat = re.sub(r"\s+", "", _mat_text)
+                _norm_sub = re.sub(r"\s+", "", _sub_text)
+                if _norm_sub and _norm_sub in _norm_mat:
+                    sraw = [{"kind": "text", "text": "", "line_start": s, "line_end": s}]
+                    log.setdefault("shared_material_sub_placeholders", []).append(sid)
+        if sid in _sub_options:
+            # 该子问拥有选项组：选项由 body.options 渲染一次，正文不得重复保留。
             sraw = _drop_option_line_blocks(
                 sraw,
-                [(o.get("line_start"), o.get("line_end")) for o in _opt_raw],
+                [(o.line_start, o.line_end) for o in _sub_options[sid]],
                 log,
                 f"{base}/{sid}/stem",
             )
@@ -3083,35 +3282,16 @@ def _composite_bodies_and_materials(
                 ),
             )
         )
-    if _opt_raw:
-        def _option_blocks(o):
-            _bl = list(_blocks_from_raw(o["blocks"], asset_sink, ctx, f"{base}-options", log))
-            if _bl and getattr(_bl[0], "kind", "") == "text":
-                _txt = getattr(_bl[0], "text", "") or ""
-                _pref = re.match(r"^\s*[A-H]\s*[.．、:：]\s*", _txt)
-                if _pref:
-                    _bl[0] = TextBlock(
-                        text=_txt[_pref.end():],
-                        line_start=getattr(_bl[0], "line_start", None),
-                        line_end=getattr(_bl[0], "line_end", None),
-                    )
-            return tuple(_bl)
-
-        _opt_blocks = tuple(
-            OptionItem(
-                label=o["label"],
-                blocks=_option_blocks(o),
-                line_start=o.get("line_start"),
-                line_end=o.get("line_end"),
-            )
-            for o in _opt_raw
-        )
-        # Attach the shared options to the last sub-question body.  This keeps
-        # a non-empty stem (content audit requires it) and places the options
-        # after the passage in source order; options are rendered once.
-        if bodies:
-            _last = bodies[-1]
-            bodies[-1] = _rebuild(_last, options=_opt_blocks)
+    # S02 R1 C4: unit-level options render with the parent body (DT renders
+    # materials first, then bodies, so they appear after the passage at their
+    # source position); sub-level groups render with their own sub body.
+    if _unit_options:
+        parent = _rebuild(parent, options=_unit_options)
+        bodies[0] = parent
+    if _sub_options:
+        for _i, _b in enumerate(bodies):
+            if _b.local_id in _sub_options:
+                bodies[_i] = _rebuild(_b, options=_sub_options[_b.local_id])
 
     log["g3_structure"] = {
         "sub_ids": sub_order,
@@ -3221,24 +3401,51 @@ def _merge_extras_and_figures(
             placed.setdefault(b["asset_id"], target)
     present |= set(placed)
 
-    if where in ("stem", "root"):
-        # AF3/Q16：figures[] 显式指派给子问（applies_to 非空）的图，即使其行号
-        # 落在父级间隙，也不得滞留父级——由对应子问的合并按 applies_to 落位。
-        assigned = {
-            asset_furniture.stem_of(f.get("asset_ref") or "")
-            for f in (unit.get("figures") or [])
-            if (f.get("applies_to") or [])
-        }
-        if assigned:
-            kept = []
-            for b in raw:
-                if b.get("kind") == "image" and b.get("asset_id") in assigned:
-                    _exclude(log, b.get("asset_id"), target, "assigned_to_sub")
-                    present.discard(b.get("asset_id"))
-                    placed.pop(b.get("asset_id"), None)
-                    continue
-                kept.append(b)
-            raw = kept
+    # S02 R1 C6: honour non-empty applies_to declarations for figures that are
+    # not physically carried by a material block.  A figure extracted into the
+    # wrong body stream is removed there and re-injected into the declared body
+    # (single target) or the parent (multi-target).
+    _mat_ranges = [
+        (m.get("line_start"), m.get("line_end"))
+        for m in (unit.get("materials") or [])
+    ]
+
+    def _inside_material(line_no):
+        return any(
+            isinstance(s, int) and isinstance(e, int) and isinstance(line_no, int)
+            and s <= line_no <= e
+            for s, e in _mat_ranges
+        )
+
+    declared_owner: dict[str, str | None] = {}
+    for f in unit.get("figures") or []:
+        apps = f.get("applies_to") or []
+        stem_f = asset_furniture.stem_of(f.get("asset_ref") or "")
+        if not stem_f or not apps:
+            continue
+        ev = f.get("evidence") or {}
+        if _inside_material(ev.get("line_start")):
+            continue  # material carrier exemption (R2 boundary), logged later
+        declared_owner[stem_f] = apps[0] if len(apps) == 1 else None
+    if declared_owner:
+        is_parent_body = where in ("stem", "root")
+        kept = []
+        for b in raw:
+            if b.get("kind") == "image" and b.get("asset_id"):
+                aid = b["asset_id"]
+                stem_b = asset_furniture.stem_of(aid)
+                key = aid if aid in declared_owner else (stem_b if stem_b in declared_owner else None)
+                if key is not None:
+                    wanted = declared_owner[key]
+                    if (wanted is None and not is_parent_body) or (
+                        wanted is not None and where != wanted
+                    ):
+                        _exclude(log, aid, target, "applies_to_declaration")
+                        present.discard(aid)
+                        placed.pop(aid, None)
+                        continue
+            kept.append(b)
+        raw = kept
     add: list = []
 
     ex = unit.get("extra_lines")
@@ -3274,9 +3481,29 @@ def _merge_extras_and_figures(
                 if isinstance(_ls, int) and consumed_lines:
                     _le2 = _le if isinstance(_le, int) else _ls
                     if all(_ln in consumed_lines for _ln in range(_ls, _le2 + 1)):
+                        # S02 R1 C7: name the real owner of the suppressed line
+                        # (sub / material / options / parent); never a phantom
+                        # owner for an unowned line.
+                        _owner = "parent"
+                        for _sq in unit.get("sub_questions") or []:
+                            if (isinstance(_sq.get("line_start"), int)
+                                    and _sq["line_start"] <= _ls <= _sq["line_end"]):
+                                _owner = "sub:" + str(_sq.get("sub_id"))
+                                break
+                        else:
+                            for _m in unit.get("materials") or []:
+                                if (isinstance(_m.get("line_start"), int)
+                                        and _m["line_start"] <= _ls <= _m["line_end"]):
+                                    _owner = "material:" + str(_m.get("material_id"))
+                                    break
+                            else:
+                                _ol = unit.get("options_lines")
+                                if _ol and len(_ol) == 2 and int(_ol[0]) <= _ls <= int(_ol[1]):
+                                    _owner = "options"
                         log.setdefault("extra_text_suppressed", []).append(
                             {"where": where, "line_start": _ls, "line_end": _le,
-                             "reason": "same_source_line_already_consumed"}
+                             "reason": "same_source_line_already_consumed",
+                             "owner": _owner}
                         )
                         continue
             add.append(b)
@@ -3284,8 +3511,6 @@ def _merge_extras_and_figures(
     for f in unit.get("figures") or []:
         ref = f.get("asset_ref") or ""
         stem = asset_furniture.stem_of(ref)
-        if not stem or stem in present:
-            continue
         ev = f.get("evidence") or {}
         ls = ev.get("line_start")
         le = ev.get("line_end") or ls
@@ -3305,6 +3530,21 @@ def _merge_extras_and_figures(
             (m.get("line_start"), m.get("line_end"))
             for m in (unit.get("materials") or [])
         ]
+        if (not stem) or stem in present:
+            # S02 R1 C6: the figure is already carried by the material blocks.
+            # Honouring the sub-question declaration would require restructuring
+            # the material carrier (R2 boundary), so keep the carrier but record
+            # the declaration explicitly — never a silent override.
+            if stem and applies and ls and _in(mat_ranges):
+                _key = f"figure_applies_to_material_carried:{stem}"
+                if _key not in log:
+                    log[_key] = True
+                    log.setdefault("figure_applies_to_material_carried", []).append(
+                        {"asset_id": stem, "declared": list(applies),
+                         "carrier": "material",
+                         "reason": "asset_inside_material_range (R2 carrier; not restructured)"}
+                    )
+            continue
         if where.startswith("material:"):
             mid = where.split(":", 1)[1]
             mat = next(
@@ -3312,28 +3552,48 @@ def _merge_extras_and_figures(
                 None,
             )
             want = mat is not None and _in([(mat.get("line_start"), mat.get("line_end"))])
-        else:
-            # AF5/Q16：子问落位以行序权威（resolve_sub_target：行重叠>如图引用>applies_to）；
-            # 多子问共享图（applies_to 多目标）仍归父级一次（AF2-B/Q15）。
-            # Layer 2 契约：PDF 证据驱动的子问落位同样以布局证据在场为前提；
-            # 无 image_layout 时退回 applies_to，保证既有输出不变（零回归）。
-            if len(applies) > 1 and not _in(mat_ranges):
+        elif applies:
+            # S02 R1 C6 in the R2-frozen context: when layout evidence yields a
+            # target for a single-target declaration, AF5 keeps the layout
+            # decision but the override is recorded explicitly (never silent).
+            # Without layout evidence (or for multi-target), the declaration is
+            # enforced: single target = that sub-question, multi = parent once.
+            if len(applies) > 1:
                 want = where in ("stem", "root")
             else:
-                if layout_ev.get_layout(ctx) is None:
-                    target_sub = applies[0] if applies else None
-                else:
+                target_sub = None
+                if layout_ev.get_layout(ctx) is not None:
                     from .figure_attribution import resolve_sub_target
 
                     target_sub = resolve_sub_target(stem, unit, ctx)
                 if target_sub is not None:
                     want = target_sub == where
+                    if target_sub != applies[0]:
+                        log.setdefault("figure_applies_to_overridden_by_layout", []).append(
+                            {"asset_id": stem, "declared": applies[0],
+                             "layout_target": target_sub}
+                        )
                 else:
-                    want = (
-                        where in ("stem", "root")
-                        and not _in(sub_ranges)
-                        and not _in(mat_ranges)
-                    )
+                    want = where == applies[0]
+                    if want:
+                        log.setdefault("figure_applies_to_enforced", []).append(
+                            {"asset_id": stem, "declared": list(applies), "where": target}
+                        )
+        else:
+            if layout_ev.get_layout(ctx) is None:
+                target_sub = None
+            else:
+                from .figure_attribution import resolve_sub_target
+
+                target_sub = resolve_sub_target(stem, unit, ctx)
+            if target_sub is not None:
+                want = target_sub == where
+            else:
+                want = (
+                    where in ("stem", "root")
+                    and not _in(sub_ranges)
+                    and not _in(mat_ranges)
+                )
         if not want:
             continue
         add.append({
