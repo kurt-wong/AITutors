@@ -1,0 +1,1324 @@
+{
+ "provenance": {
+  "generator": "Preprocessing/scripts/ocr_layout.py build_layout_evidence",
+  "md_path": "D:\\Project\\AITutors\\runs\\qcore_prebulk_owner_acceptance_01\\production\\ocr\\化学\\化学_2026山东高考真题化学（教师版）(1).md",
+  "md_sha256": "08399755ce7e9451d0c9870b72e683e6cd17a480ea5513fab027721a22a01b3f",
+  "jsonl_path": "D:\\Project\\AITutors\\runs\\qcore_prebulk_owner_acceptance_01\\production\\ocr\\化学\\化学_2026山东高考真题化学（教师版）(1).ocr_raw.jsonl",
+  "jsonl_sha256": "c76e1c3c5713afd57cd6703245c3a4d52e97cab4e61193db10880301db040d9f",
+  "summary": {
+   "pages": 18,
+   "images": 59,
+   "inline": 15,
+   "risks": 16,
+   "multi_image_groups": 9
+  }
+ },
+ "image_layout": {
+  "digest": "d83b9673019ffd27825352f346a264cbdcebc25e368cae50df7223a5a4093621",
+  "summary": {
+   "pages": 18,
+   "images": 59,
+   "inline": 15,
+   "risks": 16,
+   "multi_image_groups": 9
+  },
+  "placements": [
+   {
+    "page": 1,
+    "block_id": 10,
+    "block_order": null,
+    "bbox": [
+     123,
+     1409,
+     139,
+     1498
+    ],
+    "md_line": 55,
+    "ref": "imgs/img_in_image_box_123_1409_139_1498.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 1,
+    "block_id": 12,
+    "block_order": null,
+    "bbox": [
+     171,
+     1345,
+     233,
+     1497
+    ],
+    "md_line": 61,
+    "ref": "imgs/img_in_image_box_171_1345_233_1497.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 1,
+    "block_id": 14,
+    "block_order": null,
+    "bbox": [
+     264,
+     1423,
+     358,
+     1497
+    ],
+    "md_line": 67,
+    "ref": "imgs/img_in_image_box_264_1423_358_1497.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 1,
+    "block_id": 15,
+    "block_order": null,
+    "bbox": [
+     385,
+     1351,
+     446,
+     1503
+    ],
+    "md_line": 70,
+    "ref": "imgs/img_in_image_box_385_1351_446_1503.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 1,
+    "block_id": 18,
+    "block_order": null,
+    "bbox": [
+     476,
+     1397,
+     572,
+     1500
+    ],
+    "md_line": 79,
+    "ref": "imgs/img_in_image_box_476_1397_572_1500.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 1,
+    "block_id": 20,
+    "block_order": null,
+    "bbox": [
+     605,
+     1398,
+     625,
+     1504
+    ],
+    "md_line": 85,
+    "ref": "imgs/img_in_image_box_605_1398_625_1504.jpg",
+    "relation": "block_before",
+    "text_block_id": 16,
+    "text_line": 7,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 1,
+    "block_id": 22,
+    "block_order": null,
+    "bbox": [
+     20,
+     1548,
+     147,
+     1666
+    ],
+    "md_line": 91,
+    "ref": "imgs/img_in_image_box_20_1548_147_1666.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 1,
+    "block_id": 25,
+    "block_order": null,
+    "bbox": [
+     1011,
+     1533,
+     1150,
+     1671
+    ],
+    "md_line": 94,
+    "ref": "imgs/img_in_image_box_1011_1533_1150_1671.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 2,
+    "block_id": 6,
+    "block_order": null,
+    "bbox": [
+     689,
+     695,
+     1084,
+     855
+    ],
+    "md_line": 126,
+    "ref": "imgs/img_in_image_box_689_695_1084_855.jpg",
+    "relation": "block_after",
+    "text_block_id": 5,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 2,
+    "block_id": 9,
+    "block_order": null,
+    "bbox": [
+     118,
+     1047,
+     510,
+     1219
+    ],
+    "md_line": 134,
+    "ref": "imgs/img_in_image_box_118_1047_510_1219.jpg",
+    "relation": "block_before",
+    "text_block_id": 13,
+    "text_line": 99,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 2,
+    "block_id": 12,
+    "block_order": null,
+    "bbox": [
+     532,
+     1048,
+     685,
+     1201
+    ],
+    "md_line": 143,
+    "ref": "imgs/img_in_image_box_532_1048_685_1201.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 2,
+    "block_id": 16,
+    "block_order": null,
+    "bbox": [
+     20,
+     1548,
+     147,
+     1666
+    ],
+    "md_line": 161,
+    "ref": "imgs/img_in_image_box_20_1548_147_1666.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 2,
+    "block_id": 19,
+    "block_order": null,
+    "bbox": [
+     1011,
+     1533,
+     1150,
+     1670
+    ],
+    "md_line": 164,
+    "ref": "imgs/img_in_image_box_1011_1533_1150_1670.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 3,
+    "block_id": 7,
+    "block_order": null,
+    "bbox": [
+     20,
+     1548,
+     147,
+     1666
+    ],
+    "md_line": 191,
+    "ref": "imgs/img_in_image_box_20_1548_147_1666.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 3,
+    "block_id": 10,
+    "block_order": null,
+    "bbox": [
+     1010,
+     1533,
+     1150,
+     1671
+    ],
+    "md_line": 194,
+    "ref": "imgs/img_in_image_box_1010_1533_1150_1671.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 4,
+    "block_id": 1,
+    "block_order": null,
+    "bbox": [
+     113,
+     229,
+     418,
+     451
+    ],
+    "md_line": 201,
+    "ref": "imgs/img_in_image_box_113_229_418_451.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 4,
+    "block_id": 4,
+    "block_order": null,
+    "bbox": [
+     118,
+     783,
+     934,
+     955
+    ],
+    "md_line": 214,
+    "ref": "imgs/img_in_image_box_118_783_934_955.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 4,
+    "block_id": 8,
+    "block_order": null,
+    "bbox": [
+     703,
+     1144,
+     929,
+     1250
+    ],
+    "md_line": 231,
+    "ref": "imgs/img_in_image_box_703_1144_929_1250.jpg",
+    "relation": "inline",
+    "text_block_id": 6,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 4,
+    "block_id": 9,
+    "block_order": null,
+    "bbox": [
+     682,
+     1288,
+     751,
+     1329
+    ],
+    "md_line": 234,
+    "ref": "imgs/img_in_image_box_682_1288_751_1329.jpg",
+    "relation": "inline",
+    "text_block_id": 7,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 4,
+    "block_id": 13,
+    "block_order": null,
+    "bbox": [
+     1011,
+     1533,
+     1150,
+     1671
+    ],
+    "md_line": 237,
+    "ref": "imgs/img_in_image_box_1011_1533_1150_1671.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 5,
+    "block_id": 0,
+    "block_order": null,
+    "bbox": [
+     105,
+     95,
+     745,
+     277
+    ],
+    "md_line": 242,
+    "ref": "imgs/img_in_image_box_105_95_745_277.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 5,
+    "block_id": 7,
+    "block_order": null,
+    "bbox": [
+     240,
+     1212,
+     296,
+     1283
+    ],
+    "md_line": 266,
+    "ref": "imgs/img_in_image_box_240_1212_296_1283.jpg",
+    "relation": "inline",
+    "text_block_id": 6,
+    "text_line": 264,
+    "echo": true,
+    "risks": [
+     "inline_image_after_text_in_md",
+     "math_echo_adjacent_image"
+    ]
+   },
+   {
+    "page": 6,
+    "block_id": 0,
+    "block_order": null,
+    "bbox": [
+     109,
+     106,
+     398,
+     321
+    ],
+    "md_line": 271,
+    "ref": "imgs/img_in_image_box_109_106_398_321.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 6,
+    "block_id": 4,
+    "block_order": null,
+    "bbox": [
+     160,
+     398,
+     220,
+     476
+    ],
+    "md_line": 284,
+    "ref": "imgs/img_in_image_box_160_398_220_476.jpg",
+    "relation": "inline",
+    "text_block_id": 2,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 6,
+    "block_id": 5,
+    "block_order": null,
+    "bbox": [
+     115,
+     814,
+     318,
+     1053
+    ],
+    "md_line": 287,
+    "ref": "imgs/img_in_image_box_115_814_318_1053.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 6,
+    "block_id": 8,
+    "block_order": null,
+    "bbox": [
+     105,
+     1189,
+     933,
+     1519
+    ],
+    "md_line": 294,
+    "ref": "imgs/img_in_image_box_105_1189_933_1519.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 6,
+    "block_id": 9,
+    "block_order": null,
+    "bbox": [
+     20,
+     1548,
+     147,
+     1666
+    ],
+    "md_line": 297,
+    "ref": "imgs/img_in_image_box_20_1548_147_1666.jpg",
+    "relation": "block_before",
+    "text_block_id": 10,
+    "text_line": 300,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 6,
+    "block_id": 12,
+    "block_order": null,
+    "bbox": [
+     1011,
+     1533,
+     1150,
+     1672
+    ],
+    "md_line": 305,
+    "ref": "imgs/img_in_image_box_1011_1533_1150_1672.jpg",
+    "relation": "block_before",
+    "text_block_id": 10,
+    "text_line": 300,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 7,
+    "block_id": 10,
+    "block_order": null,
+    "bbox": [
+     103,
+     899,
+     933,
+     1153
+    ],
+    "md_line": 330,
+    "ref": "imgs/img_in_image_box_103_899_933_1153.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 7,
+    "block_id": 13,
+    "block_order": null,
+    "bbox": [
+     137,
+     1315,
+     647,
+     1428
+    ],
+    "md_line": 337,
+    "ref": "imgs/img_in_image_box_137_1315_647_1428.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 8,
+    "block_id": 8,
+    "block_order": null,
+    "bbox": [
+     596,
+     382,
+     787,
+     486
+    ],
+    "md_line": 366,
+    "ref": "imgs/img_in_image_box_596_382_787_486.jpg",
+    "relation": "inline",
+    "text_block_id": 6,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 8,
+    "block_id": 9,
+    "block_order": null,
+    "bbox": [
+     108,
+     740,
+     659,
+     1065
+    ],
+    "md_line": 369,
+    "ref": "imgs/img_in_image_box_108_740_659_1065.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 8,
+    "block_id": 17,
+    "block_order": null,
+    "bbox": [
+     20,
+     1548,
+     147,
+     1666
+    ],
+    "md_line": 390,
+    "ref": "imgs/img_in_image_box_20_1548_147_1666.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 8,
+    "block_id": 20,
+    "block_order": null,
+    "bbox": [
+     1010,
+     1533,
+     1150,
+     1671
+    ],
+    "md_line": 393,
+    "ref": "imgs/img_in_image_box_1010_1533_1150_1671.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 9,
+    "block_id": 8,
+    "block_order": null,
+    "bbox": [
+     108,
+     877,
+     653,
+     992
+    ],
+    "md_line": 414,
+    "ref": "imgs/img_in_image_box_108_877_653_992.jpg",
+    "relation": "block_before",
+    "text_block_id": 7,
+    "text_line": 412,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 9,
+    "block_id": 12,
+    "block_order": null,
+    "bbox": [
+     105,
+     1287,
+     344,
+     1454
+    ],
+    "md_line": 423,
+    "ref": "imgs/img_in_image_box_105_1287_344_1454.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 9,
+    "block_id": 14,
+    "block_order": null,
+    "bbox": [
+     21,
+     1548,
+     147,
+     1666
+    ],
+    "md_line": 428,
+    "ref": "imgs/img_in_image_box_21_1548_147_1666.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 9,
+    "block_id": 17,
+    "block_order": null,
+    "bbox": [
+     1010,
+     1533,
+     1150,
+     1671
+    ],
+    "md_line": 431,
+    "ref": "imgs/img_in_image_box_1010_1533_1150_1671.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 10,
+    "block_id": 0,
+    "block_order": null,
+    "bbox": [
+     103,
+     90,
+     773,
+     215
+    ],
+    "md_line": 436,
+    "ref": "imgs/img_in_image_box_103_90_773_215.jpg",
+    "relation": "block_before",
+    "text_block_id": 2,
+    "text_line": 442,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 10,
+    "block_id": 3,
+    "block_order": null,
+    "bbox": [
+     103,
+     226,
+     864,
+     366
+    ],
+    "md_line": 445,
+    "ref": "imgs/img_in_image_box_103_226_864_366.jpg",
+    "relation": "block_before",
+    "text_block_id": 4,
+    "text_line": 439,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 12,
+    "block_id": 12,
+    "block_order": null,
+    "bbox": [
+     21,
+     1548,
+     147,
+     1666
+    ],
+    "md_line": 530,
+    "ref": "imgs/img_in_image_box_21_1548_147_1666.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 12,
+    "block_id": 15,
+    "block_order": null,
+    "bbox": [
+     1010,
+     1533,
+     1150,
+     1671
+    ],
+    "md_line": 533,
+    "ref": "imgs/img_in_image_box_1010_1533_1150_1671.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 13,
+    "block_id": 7,
+    "block_order": null,
+    "bbox": [
+     103,
+     1021,
+     1096,
+     1469
+    ],
+    "md_line": 556,
+    "ref": "imgs/img_in_image_box_103_1021_1096_1469.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 14,
+    "block_id": 1,
+    "block_order": null,
+    "bbox": [
+     473,
+     290,
+     639,
+     356
+    ],
+    "md_line": 563,
+    "ref": "imgs/img_in_image_box_473_290_639_356.jpg",
+    "relation": "inline",
+    "text_block_id": 0,
+    "text_line": 561,
+    "echo": false,
+    "risks": [
+     "inline_image_after_text_in_md"
+    ]
+   },
+   {
+    "page": 14,
+    "block_id": 2,
+    "block_order": null,
+    "bbox": [
+     115,
+     381,
+     286,
+     456
+    ],
+    "md_line": 566,
+    "ref": "imgs/img_in_image_box_115_381_286_456.jpg",
+    "relation": "inline",
+    "text_block_id": 0,
+    "text_line": 561,
+    "echo": false,
+    "risks": [
+     "inline_image_after_text_in_md"
+    ]
+   },
+   {
+    "page": 14,
+    "block_id": 3,
+    "block_order": null,
+    "bbox": [
+     368,
+     383,
+     491,
+     452
+    ],
+    "md_line": 569,
+    "ref": "imgs/img_in_image_box_368_383_491_452.jpg",
+    "relation": "inline",
+    "text_block_id": 0,
+    "text_line": 561,
+    "echo": false,
+    "risks": [
+     "inline_image_after_text_in_md"
+    ]
+   },
+   {
+    "page": 14,
+    "block_id": 4,
+    "block_order": null,
+    "bbox": [
+     469,
+     465,
+     674,
+     588
+    ],
+    "md_line": 572,
+    "ref": "imgs/img_in_image_box_469_465_674_588.jpg",
+    "relation": "inline",
+    "text_block_id": 0,
+    "text_line": 561,
+    "echo": false,
+    "risks": [
+     "inline_image_after_text_in_md"
+    ]
+   },
+   {
+    "page": 14,
+    "block_id": 5,
+    "block_order": null,
+    "bbox": [
+     115,
+     591,
+     322,
+     745
+    ],
+    "md_line": 575,
+    "ref": "imgs/img_in_image_box_115_591_322_745.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 14,
+    "block_id": 11,
+    "block_order": null,
+    "bbox": [
+     397,
+     912,
+     559,
+     982
+    ],
+    "md_line": 588,
+    "ref": "imgs/img_in_image_box_397_912_559_982.jpg",
+    "relation": "inline",
+    "text_block_id": 9,
+    "text_line": 584,
+    "echo": false,
+    "risks": [
+     "inline_image_after_text_in_md"
+    ]
+   },
+   {
+    "page": 14,
+    "block_id": 14,
+    "block_order": null,
+    "bbox": [
+     114,
+     1164,
+     321,
+     1295
+    ],
+    "md_line": 595,
+    "ref": "imgs/img_in_image_box_114_1164_321_1295.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 14,
+    "block_id": 15,
+    "block_order": null,
+    "bbox": [
+     104,
+     1320,
+     849,
+     1448
+    ],
+    "md_line": 598,
+    "ref": "imgs/img_in_image_box_104_1320_849_1448.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 15,
+    "block_id": 2,
+    "block_order": null,
+    "bbox": [
+     593,
+     153,
+     949,
+     311
+    ],
+    "md_line": 610,
+    "ref": "imgs/img_in_image_box_593_153_949_311.jpg",
+    "relation": "block_before",
+    "text_block_id": 1,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 15,
+    "block_id": 7,
+    "block_order": null,
+    "bbox": [
+     841,
+     364,
+     1026,
+     472
+    ],
+    "md_line": 621,
+    "ref": "imgs/img_in_image_box_841_364_1026_472.jpg",
+    "relation": "inline",
+    "text_block_id": 4,
+    "text_line": 615,
+    "echo": false,
+    "risks": [
+     "inline_image_after_text_in_md"
+    ]
+   },
+   {
+    "page": 15,
+    "block_id": 8,
+    "block_order": null,
+    "bbox": [
+     106,
+     503,
+     281,
+     612
+    ],
+    "md_line": 624,
+    "ref": "imgs/img_in_image_box_106_503_281_612.jpg",
+    "relation": "inline",
+    "text_block_id": 5,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 15,
+    "block_id": 9,
+    "block_order": null,
+    "bbox": [
+     841,
+     492,
+     1063,
+     628
+    ],
+    "md_line": 627,
+    "ref": "imgs/img_in_image_box_841_492_1063_628.jpg",
+    "relation": "inline",
+    "text_block_id": 5,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 15,
+    "block_id": 10,
+    "block_order": null,
+    "bbox": [
+     105,
+     649,
+     326,
+     781
+    ],
+    "md_line": 630,
+    "ref": "imgs/img_in_image_box_105_649_326_781.jpg",
+    "relation": "inline",
+    "text_block_id": 6,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 15,
+    "block_id": 11,
+    "block_order": null,
+    "bbox": [
+     103,
+     808,
+     945,
+     936
+    ],
+    "md_line": 633,
+    "ref": "imgs/img_in_image_box_103_808_945_936.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   },
+   {
+    "page": 17,
+    "block_id": 5,
+    "block_order": null,
+    "bbox": [
+     210,
+     922,
+     345,
+     1005
+    ],
+    "md_line": 706,
+    "ref": "imgs/img_in_image_box_210_922_345_1005.jpg",
+    "relation": "inline",
+    "text_block_id": 4,
+    "text_line": 704,
+    "echo": false,
+    "risks": [
+     "inline_image_after_text_in_md"
+    ]
+   },
+   {
+    "page": 17,
+    "block_id": 14,
+    "block_order": null,
+    "bbox": [
+     1010,
+     1532,
+     1150,
+     1672
+    ],
+    "md_line": 717,
+    "ref": "imgs/img_in_image_box_1010_1532_1150_1672.jpg",
+    "relation": "block_unmapped",
+    "text_block_id": null,
+    "text_line": null,
+    "echo": false,
+    "risks": []
+   }
+  ],
+  "risks": [
+   {
+    "kind": "inline_image_after_text_in_md",
+    "page": 5,
+    "block_id": 7,
+    "md_line": 266,
+    "text_line": 264
+   },
+   {
+    "kind": "math_echo_adjacent_image",
+    "page": 5,
+    "block_id": 7,
+    "md_line": 266,
+    "text_line": 264
+   },
+   {
+    "kind": "inline_image_after_text_in_md",
+    "page": 14,
+    "block_id": 1,
+    "md_line": 563,
+    "text_line": 561
+   },
+   {
+    "kind": "inline_image_after_text_in_md",
+    "page": 14,
+    "block_id": 2,
+    "md_line": 566,
+    "text_line": 561
+   },
+   {
+    "kind": "inline_image_after_text_in_md",
+    "page": 14,
+    "block_id": 3,
+    "md_line": 569,
+    "text_line": 561
+   },
+   {
+    "kind": "inline_image_after_text_in_md",
+    "page": 14,
+    "block_id": 4,
+    "md_line": 572,
+    "text_line": 561
+   },
+   {
+    "kind": "inline_image_after_text_in_md",
+    "page": 14,
+    "block_id": 11,
+    "md_line": 588,
+    "text_line": 584
+   },
+   {
+    "kind": "inline_image_after_text_in_md",
+    "page": 15,
+    "block_id": 7,
+    "md_line": 621,
+    "text_line": 615
+   },
+   {
+    "kind": "inline_image_after_text_in_md",
+    "page": 17,
+    "block_id": 5,
+    "md_line": 706,
+    "text_line": 704
+   },
+   {
+    "kind": "md_image_without_json_image_block",
+    "page": 2,
+    "md_line": 104,
+    "ref": "imgs/img_in_image_box_136_215_336_423.jpg"
+   },
+   {
+    "kind": "md_image_without_json_image_block",
+    "page": 2,
+    "md_line": 104,
+    "ref": "imgs/img_in_image_box_377_274_576_370.jpg"
+   },
+   {
+    "kind": "md_image_without_json_image_block",
+    "page": 2,
+    "md_line": 104,
+    "ref": "imgs/img_in_image_box_638_206_767_436.jpg"
+   },
+   {
+    "kind": "md_image_without_json_image_block",
+    "page": 2,
+    "md_line": 104,
+    "ref": "imgs/img_in_image_box_830_244_1038_397.jpg"
+   },
+   {
+    "kind": "md_image_without_json_image_block",
+    "page": 3,
+    "md_line": 173,
+    "ref": "imgs/img_in_chart_box_108_403_458_682.jpg"
+   },
+   {
+    "kind": "md_image_without_json_image_block",
+    "page": 5,
+    "md_line": 255,
+    "ref": "imgs/img_in_chart_box_104_723_475_985.jpg"
+   },
+   {
+    "kind": "math_echo_without_image",
+    "page": 7,
+    "block_id": 12,
+    "bbox": [
+     106,
+     1224,
+     747,
+     1297
+    ]
+   }
+  ],
+  "multi_image_groups": [
+   {
+    "page": 1,
+    "lines": [
+     55,
+     61,
+     67,
+     70,
+     79,
+     85
+    ],
+    "y_band": [
+     1345,
+     1504
+    ]
+   },
+   {
+    "page": 2,
+    "lines": [
+     104
+    ],
+    "y_band": [
+     206,
+     436
+    ]
+   },
+   {
+    "page": 3,
+    "lines": [
+     191,
+     194
+    ],
+    "y_band": [
+     1533,
+     1671
+    ]
+   },
+   {
+    "page": 6,
+    "lines": [
+     297,
+     305
+    ],
+    "y_band": [
+     1533,
+     1672
+    ]
+   },
+   {
+    "page": 8,
+    "lines": [
+     390,
+     393
+    ],
+    "y_band": [
+     1533,
+     1671
+    ]
+   },
+   {
+    "page": 9,
+    "lines": [
+     428,
+     431
+    ],
+    "y_band": [
+     1533,
+     1671
+    ]
+   },
+   {
+    "page": 12,
+    "lines": [
+     530,
+     533
+    ],
+    "y_band": [
+     1533,
+     1671
+    ]
+   },
+   {
+    "page": 14,
+    "lines": [
+     563,
+     566,
+     569
+    ],
+    "y_band": [
+     290,
+     456
+    ]
+   },
+   {
+    "page": 15,
+    "lines": [
+     624,
+     627
+    ],
+    "y_band": [
+     492,
+     628
+    ]
+   }
+  ]
+ }
+}

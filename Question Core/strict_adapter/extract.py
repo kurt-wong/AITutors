@@ -28,9 +28,37 @@ _TR_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.S | re.I)
 _TD_RE = re.compile(r"<(td|th)\b([^>]*)>(.*?)</\1>", re.S | re.I)
 _ATTR_RE = re.compile(r"(rowspan|colspan)\s*=\s*[\"']?(\d+)", re.I)
 _TAG_RE = re.compile(r"<[^>]+>")
+# AF2-A：可见文本恢复只剥已知版式标签（div/span/br 等）——数学不等式里的裸
+# `<`（如 $K_{sp}(A)<K_{sp}(B)$）绝不能按标签吞掉；实体（&gt; 等）保持原样。
+_VISIBLE_TAG_RE = re.compile(
+    r"<\s*/?\s*(?:div|span|br|p|center|b|i|em|strong|font|hr|sup|sub|u|s)\b[^>]*>",
+    re.I,
+)
 _IMG_RE = re.compile(r"<img\b[^>]*?src\s*=\s*[\"']([^\"']+)[\"'][^>]*?>", re.I)
 _IMG_ALT_RE = re.compile(r"alt\s*=\s*[\"']([^\"']*)[\"']", re.I)
 _IMG_DIV_RE = re.compile(r"^\s*<div[^>]*>\s*<img\b", re.I)
+
+
+def visible_text(raw: str) -> str:
+    """剥版式标签留可见文本（AF2-A）；`<br>` 转行；其余标签直接去除。
+
+    Owner 2026-11-22（4.2）：`<sub>/<sup>` 承载语义（下标/上标），不能当版式
+    标签直接剥掉——先转成 `_x` / `^x` 再清理其余标签，避免 `Π₃⁴ → Π34`。
+    """
+    s = re.sub(r"<\s*br\s*/?\s*>", "\n", raw, flags=re.I)
+    s = re.sub(
+        r"<\s*sub\b[^>]*>(.*?)<\s*/\s*sub\s*>",
+        lambda m: "_" + (m.group(1) or ""),
+        s,
+        flags=re.I | re.S,
+    )
+    s = re.sub(
+        r"<\s*sup\b[^>]*>(.*?)<\s*/\s*sup\s*>",
+        lambda m: "^" + (m.group(1) or ""),
+        s,
+        flags=re.I | re.S,
+    )
+    return _VISIBLE_TAG_RE.sub("", s)
 
 
 def _strip_tags(html: str) -> str:
@@ -192,7 +220,9 @@ def extract_range(
             continue
         if buf_start is None:
             buf_start = i
-        buf.append(raw)
+        vis = visible_text(raw)
+        if vis.strip():
+            buf.append(vis)
         last_line_no = i
         i += 1
     flush_text()
@@ -310,7 +340,10 @@ def _split_inline_shared_options(
     return out
 
 
-_FOOTER_RE = re.compile(r"^\s*第\s*\d+\s*页\s*[/_／]\s*共\s*\d+\s*页\s*$")
+_FOOTER_RE = re.compile(
+    r"^\s*(?:第\s*\d+\s*页\s*[/_／]\s*共\s*\d+\s*页|←\s*更多资料|更多资料|"
+    r"交互课程径课堂\s*[：:]?)\s*$"
+)
 
 
 def _drop_footer_lines(text: str) -> str:
@@ -480,7 +513,54 @@ def _table_option_rows(
                     (label, [{"kind": "text", "text": text, "line_start": s, "line_end": e}])
                     for label, text in parsed
                 ], consumed
+
+    # ---- 策略 D：整行/整表图片单元格（列序=选项序，AF2-A/Q6）----
+    # 版式：共享选项区的表格由 N 个图片单元格组成（无正文单元格），N 个声明
+    # 选项按列序左→右一一对应；单元格图片不得丢弃（子 asset 块）。
+    for rt in tables:
+        cols_img: dict[int, list[str]] = {}
+        text_cells = 0
+        for c in rt.cells:
+            if c.get("image_srcs"):
+                cols_img.setdefault(c["col_index"], []).extend(c["image_srcs"])
+            if (c.get("content") or "").strip():
+                text_cells += 1
+        if (
+            cols_img
+            and text_cells == 0
+            and len(cols_img) == len(options)
+            and sorted(cols_img) == list(range(len(options)))
+        ):
+            rows = []
+            for i, opt in enumerate(options):
+                blocks = [
+                    {
+                        "kind": "image",
+                        "asset_id": _asset_id_from_src(src),
+                        "alt_text": None,
+                        "line_start": s,
+                        "line_end": e,
+                    }
+                    for src in cols_img[i]
+                ]
+                rows.append((opt.label, blocks))
+            consumed += sum(len(v) for v in cols_img.values())
+            return rows, consumed
     return None, consumed
+
+
+def detect_table_labels(tables: list[RawTable]) -> list[str]:
+    """从表格标签列识别选项标签（A-H 印刷字面，行序；AF2-A/Q11）。"""
+    out: list[str] = []
+    seen: set[str] = set()
+    for rt in tables:
+        for row in _table_rows(rt):
+            for c in row:
+                key = _norm_cell_label(c["content"])
+                if re.fullmatch(r"[A-H]", key) and key not in seen:
+                    seen.add(key)
+                    out.append(key)
+    return out
 
 
 def extract_options(
@@ -603,7 +683,45 @@ def extract_options(
         return out, tables
 
     # ---- 独立行区 ----
+    # 同一行区内声明多个选项（如 A/B 在 L21、C/D 在 L23）：此时 spans 集合
+    # 不止一个，上面的 `shared` 分支不触发，逐选项提取会把整行文本复制给
+    # 每一个选项（Owner duplicate_option 的主因）。先按"行区 → 选项组"
+    # 分组，多选项组走同行标记切分；切分失败保持原行为（由 ContentAudit
+    # 阻断），绝不猜测内容。
+    grouped: dict[tuple[int, int], list[OptionSpec]] = {}
     for opt in options:
+        grouped.setdefault((opt.start, opt.end), []).append(opt)
+    multi_splits: dict[str, dict] = {}
+    for (gs, ge), grp in grouped.items():
+        if len(grp) < 2:
+            continue
+        split = _split_inline_shared_options(lines, gs, ge, grp)
+        if split is not None:
+            multi_splits.update(split)
+
+    for opt in options:
+        if opt.label in multi_splits:
+            info = multi_splits[opt.label]
+            blocks = _finalize(
+                [
+                    {
+                        "kind": "text",
+                        "text": info["text"],
+                        "line_start": info["line_start"],
+                        "line_end": info["line_end"],
+                    }
+                ]
+            )
+            if blocks:
+                out.append(
+                    {
+                        "label": opt.label,
+                        "blocks": blocks,
+                        "line_start": info["line_start"],
+                        "line_end": info["line_end"],
+                    }
+                )
+                continue
         res = extract_range(lines, opt.start, opt.end)
         blocks = _finalize(res.blocks or [])
         if not blocks:

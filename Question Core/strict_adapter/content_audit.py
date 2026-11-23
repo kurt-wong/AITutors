@@ -53,6 +53,19 @@ def _norm(s: str) -> str:
 
 
 def _strip_tags(s: str) -> str:
+    """剥标签用于溯源比对；`<sub>/<sup>` 先转 `_x`/`^x`，与抽取层保持一致。"""
+    s = re.sub(
+        r"<\s*sub\b[^>]*>(.*?)<\s*/\s*sub\s*>",
+        lambda m: "_" + (m.group(1) or ""),
+        s,
+        flags=re.I | re.S,
+    )
+    s = re.sub(
+        r"<\s*sup\b[^>]*>(.*?)<\s*/\s*sup\s*>",
+        lambda m: "^" + (m.group(1) or ""),
+        s,
+        flags=re.I | re.S,
+    )
     return re.sub(r"<[^>]+>", "", s)
 
 
@@ -83,13 +96,18 @@ def audit_unit(rec: dict[str, Any]) -> dict:
         "option_items" if options else "stem_text")
 
     # ---- D 空内容块（先行：空块也影响 A/C 判定）----
-    def check_blocks(blocks: list[dict], where: str, exempt_empty: bool = False):
+    def check_blocks(blocks: list[dict], where: str, exempt_empty: bool = False, exempt_lines: set | None = None):
         for i, b in enumerate(blocks):
             txt = b.get("text") or ""
             kind = b.get("kind") or "text"
             if kind not in ("text", "math", "chemical"):
                 continue  # image/table/material_ref 结构节点另论
             if not txt.strip():
+                if exempt_lines and b.get("line_start") in exempt_lines:
+                    details.setdefault("exempt_empty_blocks", []).append(
+                        f"{where}[{i}] structural parent placeholder "
+                        f"L{b.get('line_start')}")
+                    continue
                 if exempt_empty and b.get("line_start") is not None:
                     details.setdefault("exempt_empty_blocks", []).append(
                         f"{where}[{i}] structural placeholder "
@@ -108,7 +126,10 @@ def audit_unit(rec: dict[str, Any]) -> dict:
     # D. 其余块（composite 父级题干占位可豁免）
     parent_placeholder = (
         rec.get("is_composite_parent_placeholder") is True)
-    check_blocks(stem_blocks, "stem", exempt_empty=parent_placeholder)
+    check_blocks(
+        stem_blocks, "stem", exempt_empty=parent_placeholder,
+        exempt_lines=rec.get("structural_empty_lines") or set(),
+    )
     check_blocks(material_blocks, "material")
     check_blocks(explanation_blocks, "explanation")
 
@@ -152,12 +173,22 @@ def audit_unit(rec: dict[str, Any]) -> dict:
                     cov_ranges.append((b["line_start"], b.get("line_end")
                                        or b["line_start"]))
         missing = []
+        stem_cov = [
+            (b.get("line_start"), b.get("line_end") or b.get("line_start"))
+            for b in stem_blocks + material_blocks
+            if b.get("line_start")
+        ]
         for ls, le in man_ranges:
             for ln in range(ls, le + 1):
                 if ln > n_src:
                     continue
                 if not (source_lines and not source_lines[ln - 1].strip()):
-                    if not any(a <= ln <= b for a, b in cov_ranges):
+                    in_opt = any(a <= ln <= b for a, b in cov_ranges)
+                    # Owner 2026-11-22（D2）：Manifest 可能把下一小问的题干行
+                    # 误声明为选项行；这些行已由该小问题面消费，不应再要求
+                    # 选项块覆盖（否则正确收窄选项跨度会被判 FAIL）。
+                    in_stem = any(a <= ln <= b for a, b in stem_cov)
+                    if not in_opt and not in_stem:
                         missing.append(ln)
         if missing:
             problems.append(
@@ -232,9 +263,54 @@ def build_audit_record(unit: dict, mapping, ctx) -> dict[str, Any]:
             (unit or {}).get("unit_type") == "composite_question"
             and len(parent_bodies) == 1
             and len(parent_bodies[0].stem_blocks) == 1
+            # A parent placeholder is an EMPTY TEXT block.  An ImageBlock
+            # (e.g. physics figure as the first stem block) is real content
+            # and must not be treated as an empty placeholder.
+            and getattr(parent_bodies[0].stem_blocks[0], "kind", "") == "text"
             and not (parent_bodies[0].stem_blocks[0].text or "").strip()
         ),
+        "structural_empty_lines": {
+            b.get("line_start")
+            for body in content.bodies
+            # 父体（有子问）与子体都可能是结构性占位：前者用于复合题父级，
+            # 后者用于"小问正文完全由共享材料承载"（完形/语法填空）。
+            if getattr(body, "sub_question_ids", ())
+            or getattr(body, "parent_question_ref", None) is not None
+            for b in blocks_of(list(body.stem_blocks))
+            if (b.get("text") or "").strip() == ""
+            and b.get("line_start") is not None
+        },
     }
+
+
+def duplicate_text_lines(content, min_len: int = 20) -> list[dict]:
+    """题内重复文本行（Owner C1 的通用门禁输入）。
+
+    只做"同一题内同一行文本出现 ≥2 次"的判定，阈值默认 20 字符，避免把
+    "图1""A.""---" 这类短标签算成重复。`content` 为 QuestionContent
+    （.bodies/.materials）。返回原始文本供降级日志与复核使用；调用方负责
+    把 COMPLETE 降级为 INCOMPLETE（fail-closed，不删除内容）。
+    """
+    from collections import Counter
+
+    texts: list[str] = []
+    for b in content.bodies:
+        texts += [getattr(x, "text", "") or "" for x in b.stem_blocks]
+        for o in b.options:
+            texts += [getattr(x, "text", "") or "" for x in o.blocks]
+    for m in content.materials:
+        texts += [getattr(x, "text", "") or "" for x in m.blocks]
+    norm = [(t, re.sub(r"\s+", "", t)) for t in texts if t and t.strip()]
+    counter = Counter(n for _, n in norm if len(n) >= min_len)
+    dup = {k: v for k, v in counter.items() if v > 1}
+    if not dup:
+        return []
+    out, seen = [], set()
+    for raw, n in norm:
+        if len(n) >= min_len and n in dup and n not in seen:
+            seen.add(n)
+            out.append({"count": dup[n], "text": raw.strip()[:160]})
+    return out
 
 
 def enforce_content_audit(mapping, ctx) -> dict:

@@ -1,7 +1,7 @@
 # AGENTS.md — AITutors 项目规则
 
 > 项目级长期规则，跨会话、跨 Agent 生效。修改需 Owner 明示。
-> 最后更新：2026-11-13（Owner 裁决：Question 交付四项验收条件 + 源元素关联最小机制 + 八项原则）
+> 最后更新：2026-11-19（Owner 裁决：OCR_SOURCE_ERROR 作为独立 Admission 阻断原因 + 不在下游修补 OCR 源错误）
 
 ## 0. 适用范围
 
@@ -170,9 +170,29 @@ Manifest 必须能区分：
 2. **三份固定 PDF 重跑 + 源元素级验证**：全新隔离库，Run-1 纯自动 / Run-2 含声明覆盖。
 3. **按证据最小补强**：每项须有缺陷证据、最小代码范围、测试与独立复核；禁止借机重构。
 
+### 6.9 OCR 源错误的 Admission 口径（2026-11-19 Owner 裁决）
+
+**OCR_SOURCE_ERROR 是独立的 Admission 阻断原因，不属于项目管线缺陷，也不得混入一般 `not_ready` 技术错误。**
+
+| 问题类型 | 处理原则 |
+| --- | --- |
+| Raw OCR 已错误，项目管线忠实透传 | 记录 `OCR_SOURCE_ERROR`，**Admission pending**；不发布；不补句、不替换箭头、不隐藏 chemfig、不重绘结构图 |
+| Preprocessing 改写/遗漏 OCR 已正确识别的内容 | 项目管线缺陷 → 修复管线 |
+| Manifest / Mapper / Adapter 错误切分、错绑或丢失 | 项目管线缺陷 → 修复对应层 |
+| DT 仅因渲染能力不足无法呈现已有内容 | 展示层问题 → 独立判断 |
+| PDF 本身错误或歧义 | 忠实保留源内容，不擅自校正 |
+
+**执行规则**：
+1. 归因为 `OCR_SOURCE_ERROR` 的题保留原始 OCR 证据、Manifest、Candidate 与 Revision；**不删除、不回改旧 Revision**。
+2. Admission 处置为 **pending**；不得标记 approved/published，也不依靠发布层额外黑名单。
+3. 复核/裁决材料必须区分：Revision 创建时快照列（`review_state/publication_state`）与 `qcore_state_history` 最新快照（当前状态权威）。
+4. OCR API 更新后，从原始 PDF **重新 OCR、重新走完整处理与 Admission**，比较是否改善；不在旧结果上手工修订。
+5. 当前适用案例（2026-11-19）：化学 Q5（题干漏句）、Q13（chemfig 回声）、Q14（⇌ 误读）；仅在隔离验收库，正式库 207/9 不受影响。
+
 ## 7. 变更记录
 
 | 日期 | 变更 | 依据 |
 | --- | --- | --- |
 | 2026-11-10 | 确立“原始 PDF 唯一内容事实源”为 P0；U4 改判 `SOURCE_DOCUMENT_INTERNAL_CONFLICT`；新增词表项与判定表 | Owner 会话裁决 |
 | 2026-11-13 | 新增 §6：Question 交付四项验收条件、八项原则、源元素身份最小机制、分层职责、L1–L3 验证、禁止清单、已知事实基线、三阶段实施顺序 | Owner 会话裁决（CALIBRATION-01 指导思想同步） |
+| 2026-11-19 | 新增 §6.9：`OCR_SOURCE_ERROR` 作为独立 Admission 阻断原因（pending）；禁止下游补句/替换/隐藏/重绘；OCR API 更新后重跑，不在旧 Revision 修订 | Owner 会话裁决（Q5/Q13/Q14 OCR 归因） |

@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Callable
 
 from fastapi import FastAPI, HTTPException, Query
@@ -60,7 +61,7 @@ def _block_public(block) -> dict:
     return {"kind": kind}
 
 
-def _content_public(content) -> dict:
+def _content_public(content, *, with_order_meta: bool = False) -> dict:
     data = content.model_dump(mode="json")
     # C-CLOSURE C1：学生端只暴露「学生可见内容块实际引用」的资产。
     # 答案区资产（target_path=/answers，不被任何内容块引用）绝不下发。
@@ -77,29 +78,76 @@ def _content_public(content) -> dict:
             collect_refs(o["blocks"])
     for m in data["materials"]:
         collect_refs(m["blocks"])
+
+    # AF2-C 顺序元数据（仅验收通道启用；正式契约输出不变）：
+    # 块级 line_start/line_end（图块回退 asset note 的 line_no）+ body.material_ids
+    # + material 行区——渲染层据此按源行序合并 materials/bodies，修复 materials-first
+    # 顺序错位（Q19/语文材料顺序）。
+    line_by_asset: dict[str, int] = {}
+    if with_order_meta:
+        for a in data["assets"]:
+            m = re.search(r"line_no=(\d+)", a.get("note") or "")
+            if m:
+                line_by_asset[str(a.get("asset_id"))] = int(m.group(1))
+
+    def with_lines(b: dict) -> dict:
+        out = _block_public(b)
+        if with_order_meta:
+            ls, le = b.get("line_start"), b.get("line_end")
+            if out.get("kind") == "image":
+                ls = ls if ls is not None else line_by_asset.get(str(b.get("asset_id")))
+                le = le if le is not None else ls
+            out["line_start"] = ls
+            out["line_end"] = le
+        return out
+
+    def body_min_line(b: dict):
+        vals = [
+            y.get("line_start")
+            for y in b["stem_blocks"]
+            if isinstance(y, dict) and y.get("line_start") is not None
+        ]
+        if not vals:
+            vals = [
+                line_by_asset.get(str(y.get("asset_id")))
+                for y in b["stem_blocks"]
+                if isinstance(y, dict) and y.get("kind") == "image"
+            ]
+            vals = [v for v in vals if v is not None]
+        return min(vals) if vals else None
+
     return {
         "bodies": [
             {
                 "local_id": b["local_id"],
                 "question_type": b["question_type"],
                 "printed_number": b["printed_number"],
-                "stem_blocks": [_block_public(x) for x in b["stem_blocks"]],
+                "stem_blocks": [with_lines(x) for x in b["stem_blocks"]],
                 "options": [
                     {
                         "label": o["label"],
-                        "blocks": [_block_public(x) for x in o["blocks"]],
+                        "blocks": [with_lines(x) for x in o["blocks"]],
                     }
                     for o in b["options"]
                 ],
                 "parent_question_ref": b["parent_question_ref"],
                 "sub_question_ids": b["sub_question_ids"],
+                **(
+                    {"material_ids": list(b.get("material_ids") or []),
+                     "line_start": body_min_line(b)}
+                    if with_order_meta else {}
+                ),
             }
             for b in data["bodies"]
         ],
         "materials": [
             {
                 "material_id": m["material_id"],
-                "blocks": [_block_public(x) for x in m["blocks"]],
+                "blocks": [with_lines(x) for x in m["blocks"]],
+                **(
+                    {"line_start": m.get("line_start"), "line_end": m.get("line_end")}
+                    if with_order_meta else {}
+                ),
             }
             for m in data["materials"]
         ],
@@ -143,7 +191,10 @@ def build_student_detail(aggregate, submitted: bool) -> dict | None:
         "question_type": rev.question_type.value
         if hasattr(rev.question_type, "value")
         else rev.question_type,
-        "content": _content_public(rev.content),
+        # C-AF2-1（Owner 授权 2026 AF3）：下发行序元数据（block line_start/line_end、
+        # body material_ids、material 行区）——可选字段，学生可见内容零变化；
+        # DT 渲染器据以按源行序合并 materials/bodies（修复 Q19/语文材料顺序错位）。
+        "content": _content_public(rev.content, with_order_meta=True),
         "answer_visible": field_visible(
             rev.answer_visibility.value
             if hasattr(rev.answer_visibility, "value")

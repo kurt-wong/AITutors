@@ -499,6 +499,18 @@ def _norm(text: str) -> str:
     return " ".join("".join(result).split())
 
 
+def _compact(text: str) -> str:
+    """Whitespace-insensitive normal form for math/text answer equality.
+
+    TypedAnswer values and the flattened declared string may differ only in
+    insignificant spaces (e.g. ``\\left(\\frac{1}{e},1\\right)`` vs
+    ``\\left(\\frac{1}{e}, 1\\right)``).  Removing all whitespace is safe for
+    the deterministic equality checks here; substantive character changes
+    still differ.
+    """
+    return "".join(_norm(text).split())
+
+
 def _norm_label(label: str) -> str:
     """Normalise a choice label to a single upper-case letter."""
     return _norm(label).strip().upper()
@@ -516,15 +528,17 @@ def _circled_to_digit(ch: str) -> str:
 #   (1) / （1）/ (1). —— 括号数字（可选尾点）
 #   1. / 10、        —— 数字 + 标点
 #   ①. / ①          —— 圈数字（可选尾点）
-# 前置边界：行首 / 空白 / 右括号；排除小数（1.5 不作标记）。
+# 前置边界：行首 / 空白 / 右括号 / 已裁决的分隔符（;；,，。、）；
+# 排除小数（1.5 不作标记）。圈号后的点即使紧跟数字也视为标记尾点
+# （①.4 → 标记①，答案 4），由真实样本 U15 验证。
 import re as _re
 
 _MARKER_RE = _re.compile(
-    r"(?:^|(?<=[\s)）]))"
+    r"(?:^|(?<=[\s)）;；,，。、]))"
     r"(?:"
     r"[（(]\s*(\d{1,2}|[①-⑳])\s*[)）](?:[.．、,:：;；。](?!\d))?"
     r"|(\d{1,2})(?:[.．、,:：;；。](?!\d))"
-    r"|[①-⑳](?:[.．、,:：;；。](?!\d))?"
+    r"|[①-⑳](?:[.．、,:：;；。])?"
     r")"
 )
 
@@ -639,7 +653,7 @@ def _answer_matches_declared(answer, declared_norm: str) -> bool:
         # 有序拼接全等（G4-F1）：未分段 declared 串按空格连接各空值后与
         # declared 完全一致 → 视为全覆盖（仍为逐字符全等，无猜测）。
         if all(isinstance(b, str) for b in blanks):
-            if _norm(" ".join(blanks)) == declared_norm:
+            if _compact(" ".join(blanks)) == _compact(declared_norm):
                 return True
         items = _parse_blank_items(declared_norm, len(blanks))
         if items is None:
@@ -671,7 +685,7 @@ def _answer_matches_declared(answer, declared_norm: str) -> bool:
                 if not any(r and r in _norm(item) for r in refs):
                     return False
                 continue
-            if _norm(str(blank)) != _norm(item):
+            if _compact(str(blank)) != _compact(item):
                 return False
         return True
 
@@ -679,8 +693,13 @@ def _answer_matches_declared(answer, declared_norm: str) -> bool:
         return _answer_matches_declared(answer.answer_value, declared_norm)
 
     if atype == "composite":
-        return _match_composite(answer, declared_norm) or _match_composite_flat(
-            answer, declared_norm
+        return (
+            _match_composite(answer, declared_norm)
+            or _match_composite_flat(answer, declared_norm)
+            or _match_composite_mixed_media(answer, declared_norm)
+            # Owner 2026-11-22（D8）：标记体系/分隔符/跨题号导致键位不可比时，
+            # 只要每个声明值在答案树中有独立落点，就视为"已表示"。
+            or _match_declared_set(answer, declared_norm)
         )
 
     if atype == "multi_step":
@@ -689,7 +708,7 @@ def _answer_matches_declared(answer, declared_norm: str) -> bool:
     # numeric / expression / chemical / fallback: exact match on the value.
     value = getattr(answer, "answer_value", None)
     if isinstance(value, str):
-        return _norm(declared_norm) == _norm(value)
+        return _compact(declared_norm) == _compact(value)
     return False
 
 
@@ -747,6 +766,86 @@ def _flatten_answer_values(answer) -> list:
     return [value]
 
 
+_DECLARED_SPLIT_RE = __import__("re").compile(
+    r"[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]|\(\s*\d{1,2}\s*\)|（\s*\d{1,2}\s*）|\d{1,2}\s*[.．、]"
+    r"|[；;，,。、]|\s+"
+)
+
+
+_MATH_SPAN_RE = __import__("re").compile(r"\$[^$\n]{1,400}\$")
+
+
+def _declared_tokens(declared_norm: str) -> list[str]:
+    """按印刷标记/分隔符把 declared 串切成值片段（标记本身丢弃）。
+
+    2026-11-22 修正（数学 p20 回归）：`$...$` 数学片段必须**整体保留**，
+    不能被 `,`/`、` 等分隔符切开——坐标 `(0,-2)`、公式里的逗号都是值的一部分。
+    """
+    tokens: list[str] = []
+
+    def _split_prose(part: str) -> None:
+        for piece in _DECLARED_SPLIT_RE.split(part):
+            p = (piece or "").strip().strip(".．、:：;；,，()（）")
+            if p and __import__("re").search(r"[\w\u4e00-\u9fff]", p):
+                tokens.append(p)
+
+    pos = 0
+    for m in _MATH_SPAN_RE.finditer(declared_norm):
+        _split_prose(declared_norm[pos : m.start()])
+        tokens.append(m.group(0))
+        pos = m.end()
+    _split_prose(declared_norm[pos:])
+    return tokens
+
+
+_LOOSE_STRIP_RE = __import__("re").compile(r"[\s$\\{}^_~.,，。、；;:：!！?？\"'“”‘’()（）\[\]【】]+")
+
+
+def _loose(s: str) -> str:
+    return _LOOSE_STRIP_RE.sub("", s or "")
+
+
+def _match_declared_set(answer, declared_norm: str) -> bool:
+    """表示性兜底：declared 的每个值片段都必须能在答案树中找到。
+
+    用于标记体系不一致（①vs（1））、分隔符不同（；/，）、或一个单元跨多个
+    印刷题号的场景。**只验证"声明值是否都被答案对象表示"**，不判断答案对错。
+
+    两段式：先做一一对应（防止一个叶子覆盖多个声明值）；剩余片段再允许
+    复用一个长答案叶子（散文式答案本身包含多个语义片段，这是合法形态）。
+    """
+    leaves = [_loose(v) for v in _flatten_answer_values(answer) if isinstance(v, str) and v.strip()]
+    if not leaves:
+        return False
+    tokens = [_loose(t) for t in _declared_tokens(declared_norm)]
+    tokens = [t for t in tokens if t]
+    if not tokens:
+        return False
+    used: set[int] = set()
+    pending = []
+    for tn in tokens:
+        hit = None
+        for i, leaf in enumerate(leaves):
+            if i in used:
+                continue
+            if tn == leaf or tn in leaf or leaf in tn:
+                hit = i
+                break
+        if hit is None:
+            pending.append(tn)
+        else:
+            used.add(hit)
+    for tn in pending:
+        # 允许复用叶子只针对"长散文式答案"：叶子必须显著长于片段
+        # （≥2×），否则一个短叶子会掩盖多个缺失片段。
+        if not any(
+            (tn in leaf and len(leaf) >= 2 * len(tn)) or (leaf in tn and len(tn) >= 2 * len(leaf))
+            for leaf in leaves
+        ):
+            return False
+    return True
+
+
 def _match_composite_flat(answer, declared_norm: str) -> bool:
     """键位解析失败/键集不齐时的有序全等兜底（G4-F3）。
 
@@ -764,6 +863,123 @@ def _match_composite_flat(answer, declared_norm: str) -> bool:
     if items is None or len(items) != len(leaves):
         return False
     return all(_norm(item) == _norm(leaf) for item, leaf in zip(items, leaves))
+
+
+def _flatten_answer_nodes(answer) -> list[dict]:
+    """Ordered leaves with slot-binding metadata (for mixed-media proof).
+
+    Unlike ``_flatten_answer_values`` this keeps the owning FillBlankAnswer
+    and whether the leaf has a SlotBinding, so an image leaf (AssetSlot) can
+    be verified by asset reference + binding instead of by text equality.
+    """
+    nodes: list[dict] = []
+
+    def walk(node, parent_sub=None) -> None:
+        atype = getattr(node, "answer_type", None)
+        value = getattr(node, "answer_value", None)
+        if atype == "composite":
+            for sub in value or ():
+                walk(sub, sub)
+            return
+        if atype == "composite_sub":
+            if value is not None:
+                walk(value, node)
+            return
+        if atype == "fill_blank":
+            bindings = {
+                b.slot_index for b in getattr(node, "slot_bindings", ())
+            }
+            for i, v in enumerate(value or ()):
+                nodes.append({
+                    "value": v,
+                    "owner": node,
+                    "slot_index": i,
+                    "bound": i in bindings,
+                    "parent_sub": parent_sub,
+                })
+            return
+        if atype in ("multi_choice", "multi_step"):
+            for v in value or ():
+                nodes.append({
+                    "value": v,
+                    "owner": node,
+                    "slot_index": None,
+                    "bound": False,
+                    "parent_sub": parent_sub,
+                })
+            return
+        nodes.append({
+            "value": value,
+            "owner": node,
+            "slot_index": None,
+            "bound": False,
+            "parent_sub": parent_sub,
+        })
+
+    walk(answer)
+    return nodes
+
+
+def _asset_slots_bound(asset_nodes: list[dict]) -> bool:
+    """Every image-answer leaf must carry an asset and a slot binding."""
+    for node in asset_nodes:
+        slot = node["value"]
+        if not getattr(slot, "assets", ()):
+            return False
+        if not node.get("bound"):
+            return False
+    return True
+
+
+def _match_composite_mixed_media(answer, declared_norm: str) -> bool:
+    """Mixed image/text slot proof for composite answers (U10).
+
+    The declared answer string cannot carry an image.  When the source answer
+    area contains an image slot plus text slots, the declared string covers
+    only the text slots; the image slot must still be represented by an
+    AssetSlot **and** a SlotBinding.  A declared string that does cover every
+    leaf (including an asset token) is checked leaf-by-leaf.
+    """
+    nodes = _flatten_answer_nodes(answer)
+    if not nodes:
+        return False
+    if any(n["value"] is None for n in nodes):
+        return False
+    asset_nodes = [
+        n for n in nodes if isinstance(n["value"], AssetSlot)
+    ]
+    if not asset_nodes:
+        return False
+    text_nodes = [n for n in nodes if isinstance(n["value"], str)]
+
+    # Case 1: declared covers every leaf, including an asset token.
+    items_all = _parse_blank_items(declared_norm, len(nodes))
+    if items_all is not None:
+        for item, node in zip(items_all, nodes):
+            value = node["value"]
+            if isinstance(value, AssetSlot):
+                ids = []
+                for ref in value.assets:
+                    aid = _norm(ref.asset_id)
+                    ids.append(aid)
+                    ids.append(_norm(aid.rsplit(".", 1)[0]))
+                if not any(i and i in _norm(item) for i in ids):
+                    return False
+            elif _norm(item) != _norm(value):
+                return False
+        return _asset_slots_bound(asset_nodes)
+
+    # Case 2: declared covers only the text leaves (image slot omitted).
+    if not text_nodes:
+        return False
+    items_text = _parse_blank_items(declared_norm, len(text_nodes))
+    if items_text is None:
+        return False
+    if [_norm(i) for i in items_text] != [
+        _norm(n["value"]) for n in text_nodes
+    ]:
+        return False
+    return _asset_slots_bound(asset_nodes)
 
 
 def _match_multi_step(answer, declared_norm: str) -> bool:
