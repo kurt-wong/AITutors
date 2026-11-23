@@ -41,9 +41,10 @@ import os
 import re
 import sys
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import UUID
 
 # ---------------------------------------------------------------------------
 # 版本身份：唯一来源 = 包级常量（与 mapper 落库一致；见 ADAPTER_VERSION_IDENTITY_REPORT.md）
@@ -250,6 +251,8 @@ def build_context(p: PaperInput, run_id: str) -> tuple[MappingContext, dict]:
         paper_id=p.paper_id,
         subject=p.subject,
         run_id=run_id,
+        # Layer 2：布局证据/跨单元归属需要原始 PDF 文本层坐标（只读）。
+        source_pdf_path=str(p.source_pdf_path),
     )
     meta = {
         "annotated_md_resolution": ann_note,
@@ -329,6 +332,87 @@ def assert_connected_target(target_db: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _force_incomplete(mapping, reason: dict):
+    """Temporarily withhold a question from students (Owner 2026-11-22 §11.3).
+
+    Content is unchanged and fully preserved; only completeness/state is forced to
+    ``incomplete`` so Admission produces a ``not_ready`` revision. No SQL, no
+    publication bypass.
+    """
+    from question_core.contracts.v1 import Completeness
+
+    core = mapping.candidate.core
+    data = core.model_dump()
+    data["completeness"] = Completeness.INCOMPLETE
+    new_core = type(core).model_validate(data)
+    source = mapping.candidate.source
+    src_data = source.model_dump()
+    if isinstance(src_data.get("answer_declaration"), dict):
+        src_data["answer_declaration"]["completeness"] = Completeness.INCOMPLETE
+    new_source = type(source).model_validate(src_data)
+    cand = type(mapping.candidate)(core=new_core, source=new_source)
+    log = dict(mapping.log or {})
+    log["suspended_due_to"] = reason
+    return replace(mapping, candidate=cand, completeness="incomplete", state_plan="hold_not_ready", log=log)
+
+
+def load_suspensions(path: str | Path | None) -> list[dict]:
+    if not path:
+        return []
+    p = Path(path)
+    if not p.is_file():
+        raise InputContractError(f"suspensions file not found: {p}")
+    data = json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        raise InputContractError("suspensions file must be a JSON array")
+    for e in data:
+        if not e.get("reason_code"):
+            raise InputContractError("each suspension needs reason_code")
+    return data
+
+
+def _match_suspension(suspensions, paper_id: str, unit: dict) -> dict | None:
+    if not suspensions:
+        return None
+    printed = str(unit.get("printed_number"))
+    uid = str(unit.get("unit_id"))
+    for e in suspensions:
+        if e.get("paper_id") not in (None, paper_id):
+            continue
+        if str(e.get("printed_number")) == printed or str(e.get("unit_id")) == uid:
+            return e
+    return None
+
+
+def _match_exclusion(exclusions, paper_id: str, unit: dict) -> dict | None:
+    """Match a declared exclusion by (paper_id, printed_number | unit_id)."""
+    if not exclusions:
+        return None
+    printed = str(unit.get("printed_number"))
+    uid = str(unit.get("unit_id"))
+    for e in exclusions:
+        if e.get("paper_id") not in (None, paper_id):
+            continue
+        if str(e.get("printed_number")) == printed or str(e.get("unit_id")) == uid:
+            return e
+    return None
+
+
+def load_exclusions(path: str | Path | None) -> list[dict]:
+    if not path:
+        return []
+    p = Path(path)
+    if not p.is_file():
+        raise InputContractError(f"exclusions file not found: {p}")
+    data = json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        raise InputContractError("exclusions file must be a JSON array")
+    for e in data:
+        if not e.get("reason_code"):
+            raise InputContractError("each exclusion needs reason_code")
+    return data
+
+
 def run_papers(
     papers: list[PaperInput],
     target_db: str,
@@ -337,6 +421,8 @@ def run_papers(
     dry_run: bool = False,
     forbidden: frozenset[str] = DEFAULT_FORBIDDEN_DBS,
     forbidden_prefixes: tuple[str, ...] = FORBIDDEN_DB_PREFIXES,
+    exclusions: list[dict] | None = None,
+    suspensions: list[dict] | None = None,
 ) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -386,9 +472,22 @@ def run_papers(
                 "unit_id": unit.get("unit_id"),
                 "ordinal": idx,
                 "unit_type": unit.get("unit_type"),
+                "printed_number": unit.get("printed_number"),
             }
+            exclusion = _match_exclusion(exclusions, p.paper_id, unit)
+            if exclusion is not None:
+                # Owner 2026-11-22：源文缺少该题必需的媒体（如无音频听力）时，
+                # 该 unit 不进入 Question Core；证据（PDF/OCR/Manifest）保留。
+                urec["status"] = "excluded"
+                urec["exclusion"] = exclusion
+                prec["units"].append(urec)
+                continue
             try:
                 m = map_unit(unit, ctx)
+                _susp = _match_suspension(suspensions, p.paper_id, unit)
+                if _susp is not None:
+                    m = _force_incomplete(m, _susp)
+                    urec["suspended"] = _susp.get("reason_code")
                 urec["status"] = "mapped"
                 urec["completeness"] = m.completeness
                 pairs.append((idx, m))
@@ -483,13 +582,18 @@ def run_papers(
             for p, ctx, ordinal, m, res in admitted_all:
                 prec = next(x for x in summary["papers"] if x["paper_id"] == p.paper_id)
                 urec = next(u for u in prec["units"] if u["ordinal"] == ordinal)
-                if urec.get("persist") != "committed":
+                if urec.get("persist") not in (
+                    "committed_new",
+                    "revision_added",
+                    "skipped_duplicate",
+                ):
                     continue
-                agg = repo.get_question_aggregate(res.question_id)
+                qid_text = urec.get("question_id") or str(res.question_id)
+                agg = repo.get_question_aggregate(UUID(qid_text))
                 readback["units"].append(
                     {
                         "unit_id": res.unit_id,
-                        "question_id": str(res.question_id),
+                        "question_id": qid_text,
                         "revision_count": len(agg.revisions),
                         "instance_count": len(agg.instances),
                         "instance_source_document_id": [
@@ -506,7 +610,8 @@ def run_papers(
     summary["totals"] = {
         "papers": len(papers),
         "units_in": len(flat),
-        "mapped": sum(1 for u in flat if u.get("status") not in ("map_failed",) and u.get("status") != "paper_input_failed"),
+        "excluded": sum(1 for u in flat if u.get("status") == "excluded"),
+        "mapped": sum(1 for u in flat if u.get("status") not in ("map_failed", "excluded") and u.get("status") != "paper_input_failed"),
         "map_failed": sum(1 for u in flat if u.get("status") == "map_failed"),
         "admitted": sum(1 for u in flat if u.get("admitted") is True),
         "not_admitted": sum(1 for u in flat if u.get("status") == "not_admitted"),
@@ -640,6 +745,20 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         help="additional forbidden db name (repeatable)",
     )
+    ap.add_argument(
+        "--exclusions",
+        type=str,
+        default=None,
+        help="JSON array of units excluded from Question Core (e.g. listening without audio); "
+        "each item needs reason_code",
+    )
+    ap.add_argument(
+        "--suspend",
+        type=str,
+        default=None,
+        help="JSON array of units temporarily withheld from students (content kept, "
+        "completeness forced incomplete); each item needs reason_code",
+    )
     args = ap.parse_args(argv)
 
     run_id = args.run_id or f"generic-exec-{now().replace(':', '').replace('-', '')[:15]}"
@@ -657,6 +776,8 @@ def main(argv: list[str] | None = None) -> int:
         run_id=run_id,
         dry_run=args.dry_run,
         forbidden=forbidden,
+        exclusions=load_exclusions(args.exclusions),
+        suspensions=load_suspensions(args.suspend),
     )
     print(
         json.dumps(
