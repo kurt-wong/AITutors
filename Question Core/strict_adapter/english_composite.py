@@ -53,6 +53,7 @@ from .mapper import (
     _item_statement,
     _rebuild,
     _register_asset,
+    identity_anchor_for,
 )
 from .rules import answer_completeness, question_type, resolve_attribution
 
@@ -900,7 +901,7 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         TextBlock,
         Visibility,
         canonical_content_hash,
-        derive_idempotency_key,
+        derive_identity_key,
     )
 
     from . import ADAPTER_VERSION
@@ -976,7 +977,7 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
     # ---- 2. 内容：父 Material + 父 body + 子 body ----
     base = unit_id.lower()
     mres = extract_range(ctx.lines, mrange[0], mrange[1])
-    mblocks = _blocks_from_raw(mres.blocks, asset_sink, ctx, f"{base}-material")
+    mblocks = _blocks_from_raw(mres.blocks, asset_sink, ctx, f"{base}-material", log)
     material = Material(
         material_id=f"{base}-material",
         title=None,
@@ -1179,11 +1180,11 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         source_md_hash=ctx.source_md_sha,
         source_pdf_hash=ctx.source_pdf_sha,
     )
-    idem_key = derive_idempotency_key(
-        source_type="preprocessing",
-        source_document_id=source_document_id,
-        input_hashes=input_hashes,
-    )
+    # D9：英语复合题与普通题共用同一套源锚身份（question_numbers 才是题号权威）
+    anchor = identity_anchor_for(unit, ctx)
+    idem_key = derive_identity_key(anchor)
+    log["identity_anchor"] = anchor.as_dict()
+    log["identity_key_scheme"] = "qk2_source_anchor"
     stem_texts = "\n".join(
         getattr(b, "text", "")
         for body in bodies
@@ -1321,4 +1322,5 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         instance_fields=instance_fields,
         state_plan=state_plan,
         log=log,
+        identity_anchor=anchor.as_dict(),
     )

@@ -156,6 +156,13 @@ def admit(
         question_id=qid,
         revision_id=rid,
         source_document_id=ctx.paper_id,
+        # D9 C2: the occurrence must remember its logical paper segment so a
+        # later re-import can only reuse it inside the same segment.
+        paper_segment_id=(
+            (mapping.identity_anchor or {}).get("paper_segment_id")
+            or ctx.paper_segment_id
+            or ctx.paper_id
+        ),
         printed_number=mapping.instance_fields.get("printed_number"),
         question_numbers=mapping.instance_fields.get("question_numbers") or (),
         section=mapping.instance_fields.get("section"),

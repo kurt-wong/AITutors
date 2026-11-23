@@ -516,3 +516,46 @@ class TestUrlOverrideAndCli:
         assert s["totals"]["admitted"] > 20  # 12+15+11 units 全形态
         subjects = {p["paper_id"][:8]: p["subject"] for p in s["papers"]}
         assert sorted(subjects.values()) == ["化学", "英语", "语文"]
+
+
+class TestD9C2SegmentPropagation:
+    """C2: paper_segment_id must reach the mapping anchor through the entry."""
+
+    SEG = "2020全国I卷高考真题化学（教师版）(1)/segA"
+
+    def _papers(self, segment: str):
+        return [
+            PaperInput(
+                paper_id="2020全国I卷高考真题化学（教师版）(1)",
+                subject="化学",
+                manifest_path=_mig(CHEM_MANIFEST, CHEM_MD),
+                source_md_path=CHEM_MD,
+                source_pdf_path=CHEM_PDF,
+                annotated_md_path=None,
+                paper_segment_id=segment,
+            )
+        ]
+
+    @SEALED_CHEM
+    def test_declared_segment_reaches_every_anchor(self, tmp_path):
+        s = run_papers(
+            self._papers(self.SEG), "qcore_ge01_dryrun", tmp_path / "out", "t-seg", dry_run=True
+        )
+        assert s["totals"]["map_failed"] == 0
+        units = s["papers"][0]["units"]
+        anchors = [u["identity_anchor"] for u in units if u.get("identity_anchor")]
+        assert anchors, "mapping must record the identity anchor"
+        assert {a["paper_segment_id"] for a in anchors} == {self.SEG}
+
+    @SEALED_CHEM
+    def test_absent_segment_defaults_to_paper_id(self, tmp_path):
+        s = run_papers(
+            self._papers(""), "qcore_ge01_dryrun", tmp_path / "out2", "t-seg2", dry_run=True
+        )
+        assert s["totals"]["map_failed"] == 0
+        anchors = [
+            u["identity_anchor"] for u in s["papers"][0]["units"] if u.get("identity_anchor")
+        ]
+        assert {a["paper_segment_id"] for a in anchors} == {
+            "2020全国I卷高考真题化学（教师版）(1)"
+        }

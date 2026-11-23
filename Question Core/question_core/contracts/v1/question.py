@@ -152,6 +152,12 @@ class QuestionInstance(ContractModel):
     revision_id: UUID
     #: Identity of the paper / upload this occurrence belongs to.
     source_document_id: Annotated[str, Field(min_length=1, max_length=300)]
+    #: Logical paper inside that source document (D9 C2). A double-paper PDF
+    #: ships several logical papers under one ``source_document_id``; an
+    #: occurrence may only be reused inside its own segment. ``None`` means
+    #: "legacy row, single-segment default": resolution may treat it as equal
+    #: to ``source_document_id`` and must never attach it to another segment.
+    paper_segment_id: Annotated[str, Field(max_length=300)] | None = None
     printed_number: Annotated[str, Field(max_length=20)] | None = None
     question_numbers: tuple[int, ...] = Field(default_factory=tuple)
     section: Annotated[str, Field(max_length=300)] | None = None
@@ -213,11 +219,20 @@ class QuestionAggregate(ContractModel):
         latest_by_rev = {}
         for snap in self.state_history:
             latest_by_rev[snap.revision_id] = snap
-        for rev in self.revisions:
-            snap = latest_by_rev.get(rev.revision_id, rev.state)
-            if snap is not None and snap.publication == PublicationState.PUBLISHED:
-                return rev
-        return None
+        published = [
+            rev
+            for rev in self.revisions
+            if (snap := latest_by_rev.get(rev.revision_id, rev.state)) is not None
+            and snap.publication == PublicationState.PUBLISHED
+        ]
+        if len(published) > 1:
+            # D9 C1: never paper over two "currently published" revisions by
+            # returning whichever comes first in the tuple.
+            raise ValueError(
+                "multiple published revisions for one question: "
+                + ", ".join(str(r.revision_id) for r in published)
+            )
+        return published[0] if published else None
 
 
 __all__ = [

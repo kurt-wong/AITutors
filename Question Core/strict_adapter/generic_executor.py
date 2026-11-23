@@ -114,6 +114,11 @@ class PaperInput:
     source_md_path: Path
     source_pdf_path: Path
     annotated_md_path: Path | None
+    #: D9 C2: optional logical paper segment. Empty means "single-segment
+    #: default" — the mapping context then uses ``paper_id``. This is a
+    #: pass-through only; the descriptor format gains no required field and no
+    #: Manifest rule is added here.
+    paper_segment_id: str = ""
 
     @classmethod
     def from_dict(cls, d: dict, base_dir: Path) -> "PaperInput":
@@ -145,6 +150,7 @@ class PaperInput:
             source_md_path=paths["source_md_path"],
             source_pdf_path=paths["source_pdf_path"],
             annotated_md_path=paths["annotated_md_path"],
+            paper_segment_id=str(d.get("paper_segment_id") or "").strip(),
         )
 
 
@@ -251,6 +257,8 @@ def build_context(p: PaperInput, run_id: str) -> tuple[MappingContext, dict]:
         paper_id=p.paper_id,
         subject=p.subject,
         run_id=run_id,
+        # D9 C2: pass the logical paper segment through (empty -> paper_id).
+        paper_segment_id=p.paper_segment_id,
         # Layer 2：布局证据/跨单元归属需要原始 PDF 文本层坐标（只读）。
         source_pdf_path=str(p.source_pdf_path),
     )
@@ -490,6 +498,10 @@ def run_papers(
                     urec["suspended"] = _susp.get("reason_code")
                 urec["status"] = "mapped"
                 urec["completeness"] = m.completeness
+                # D9 C1/C2: make the source anchor visible in run evidence so a
+                # reviewer can verify segment propagation without a DB.
+                urec["identity_key"] = m.candidate.core.ingestion.candidate_idempotency_key
+                urec["identity_anchor"] = m.identity_anchor
                 pairs.append((idx, m))
             except Exception as exc:  # noqa: BLE001
                 urec["status"] = "map_failed"
@@ -543,6 +555,7 @@ def run_papers(
             session_scope,
         )
         from question_core.persistence.exceptions import NotFoundError
+        from .ingest import persist_mapping
 
         settings = DatabaseSettings.from_env()
         if settings.dbname != target_db:
@@ -557,16 +570,15 @@ def run_papers(
             try:
                 with session_scope(engine) as session:
                     repo = QuestionCoreRepository(session)
-                    try:
-                        existing = repo.get_candidate_by_key(
-                            cand.core.ingestion.candidate_idempotency_key, ADAPTER_VERSION
-                        )
-                        urec["persist"] = "skipped_duplicate"
-                        urec["existing_candidate_id"] = str(existing.core.candidate_id)
-                    except NotFoundError:
-                        repo.save_candidate_with_question(cand, res.aggregate)
-                        urec["persist"] = "committed"
-                        urec["candidate_id"] = str(cand.core.candidate_id)
+                    record = persist_mapping(repo, m, res, paper_id=p.paper_id)
+                    urec["persist"] = record["persist"]
+                    urec["identity_key"] = record["identity_key"]
+                    urec["identity_anchor"] = record["identity_anchor"]
+                    urec["matched_by"] = record["matched_by"]
+                    if record.get("question_id"):
+                        urec["question_id"] = record["question_id"]
+                    if record.get("candidate_id"):
+                        urec["candidate_id"] = record["candidate_id"]
             except Exception as exc:  # noqa: BLE001
                 urec["persist"] = "rolled_back"
                 urec["error"] = f"{type(exc).__name__}: {exc}"
@@ -658,7 +670,7 @@ def _write_per_paper_outputs(out_dir: Path, summary: dict) -> None:
                     "manifest_units": prec.get("manifest_units"),
                     "mapped_count": prec.get("mapped_count"),
                     "units": [
-                        {k: u.get(k) for k in ("unit_id", "ordinal", "unit_type", "status", "completeness", "error") if k in u}
+                        {k: u.get(k) for k in ("unit_id", "ordinal", "unit_type", "status", "completeness", "identity_key", "identity_anchor", "error") if k in u}
                         for u in units
                     ],
                 },

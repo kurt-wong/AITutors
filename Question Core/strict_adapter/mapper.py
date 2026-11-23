@@ -59,6 +59,11 @@ from question_core.contracts.v1 import (
     Visibility,
     canonical_content_hash,
     derive_idempotency_key,
+    derive_identity_key,
+    IdentityAnchor,
+    IdentityAnchorError,
+    build_section_id,
+    normalize_section_label,
     new_id,
 )
 
@@ -105,6 +110,11 @@ class MappingContext:
     annotated_md_bytes: int
     image_by_line: dict = field(default_factory=dict)
     paper_id: str = ""
+    #: D9: logical paper inside a PDF. A double-paper PDF (e.g. 2020 天津英语
+    #: 第一次 ships the written paper and the listening paper A together) must
+    #: declare segments; a single-paper PDF leaves this empty and the paper id
+    #: is used. Never derived from processing artifacts.
+    paper_segment_id: str = ""
     subject: str = ""  # 试卷级显式学科（R1 B2）：缺失即 fail-closed
     run_id: str = ""
     source_pdf_path: str = ""  # AF3/Q14：跨单元图归属守卫需要 PDF 文本层坐标
@@ -122,6 +132,9 @@ class UnitMapping:
     instance_fields: dict
     state_plan: str  # "approve_publish" | "hold_not_ready"
     log: dict
+    #: D9 identity anchor (dict form of ``IdentityAnchor``), used by the
+    #: importer to resolve an existing Question instead of minting a new one.
+    identity_anchor: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -3837,11 +3850,13 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         source_pdf_hash=ctx.source_pdf_sha,
     )
     source_document_id = f"{ctx.paper_id}/{unit_id}"
-    idem_key = derive_idempotency_key(
-        source_type="preprocessing",
-        source_document_id=source_document_id,
-        input_hashes=input_hashes,
-    )
+    # D9: identity is anchored on (paper_segment, section, question_numbers) +
+    # the source PDF hash. Manifest / OCR markdown hashes stay in input_hashes
+    # as run evidence and never enter the key.
+    anchor = identity_anchor_for(unit, ctx)
+    idem_key = derive_identity_key(anchor)
+    log["identity_anchor"] = anchor.as_dict()
+    log["identity_key_scheme"] = "qk2_source_anchor"
 
     stem_texts = "\n".join(
         getattr(b, "text", "")
@@ -4003,6 +4018,7 @@ def map_unit(unit: dict, ctx: MappingContext) -> UnitMapping:
         instance_fields=instance_fields,
         state_plan=state_plan,
         log=log,
+        identity_anchor=anchor.as_dict(),
     )
 
 
@@ -4011,3 +4027,75 @@ def map_all(ctx: MappingContext) -> list[UnitMapping]:
     for unit in ctx.manifest["units"]:
         out.append(map_unit(unit, ctx))
     return out
+
+
+# ---------------------------------------------------------------------------
+# D9 identity anchor: (paper_segment, section_id, question_numbers)
+# ---------------------------------------------------------------------------
+
+
+def _unit_question_numbers(unit: dict) -> tuple[int, ...]:
+    """Printed question numbers the unit covers.
+
+    D9 evidence (2026-11-23): ``printed_number`` is not trustworthy — English
+    composite units carry a *section-relative* number there (``U21-23`` has
+    ``printed_number='1'``) and 2020 江苏物理 mis-copies 12/13/14 as all
+    ``'12'``. ``question_numbers`` is the authority.
+    """
+    raw = unit.get("question_numbers") or []
+    out: list[int] = []
+    for value in raw:
+        try:
+            out.append(int(value))
+        except (TypeError, ValueError):
+            raise IdentityAnchorError(
+                f"{unit.get('unit_id')}: question_numbers contains "
+                f"non-integer {value!r}; cannot anchor identity"
+            ) from None
+    if not out:
+        raise IdentityAnchorError(
+            f"{unit.get('unit_id')}: no question_numbers; a unit without "
+            "printed question numbers has no stable anchor (D9 forbids "
+            "positional fallback)"
+        )
+    return tuple(out)
+
+
+def section_ids_for(units: list[dict]) -> dict[str, str]:
+    """``unit_id -> section_id`` using contiguous section runs.
+
+    A new run starts whenever the normalised label changes. The ordinal
+    counts earlier runs *with the same label*, so inserting a question inside
+    an unchanged section does not shift every later section id (the failure
+    mode of a per-unit positional ordinal).
+    """
+    seen: dict[str, int] = {}
+    out: dict[str, str] = {}
+    prev_label: str | None = None
+    current_ordinal = 0
+    for unit in units:
+        label = normalize_section_label(unit.get("section"))
+        if label != prev_label:
+            seen[label] = seen.get(label, 0) + 1
+            current_ordinal = seen[label]
+            prev_label = label
+        out[str(unit.get("unit_id"))] = build_section_id(
+            unit.get("section"), current_ordinal
+        )
+    return out
+
+
+def identity_anchor_for(unit: dict, ctx: MappingContext) -> IdentityAnchor:
+    """Source anchor for one unit (D9). Raises IdentityAnchorError on bad input."""
+    segment = (ctx.paper_segment_id or "").strip() or ctx.paper_id
+    if not segment:
+        raise IdentityAnchorError("paper_segment_id/paper_id missing on context")
+    units = ctx.manifest.get("units") or []
+    section_id = section_ids_for(list(units))[str(unit.get("unit_id"))]
+    anchor = IdentityAnchor(
+        paper_segment_id=segment,
+        section_id=section_id,
+        question_numbers=_unit_question_numbers(unit),
+        source_hash=ctx.source_pdf_sha or "",
+    ).validate()
+    return anchor

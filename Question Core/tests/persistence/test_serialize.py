@@ -198,7 +198,11 @@ class TestSchemaBaselineUntouched:
         # 形状变化，经审查后重生成基线。旧冻结值依次为：
         #   0cba7f5a…（2026-11-07 起，R5 前）
         #   a09c051f…（R5 后、Phase 3 前，contract 1.0.0）
+        #   b688da07…（Phase 3 后）
+        # 2026-11-23 QCORE-D9-C1-C2-01：QuestionInstance 增加可选
+        # paper_segment_id（D9 C2 身份隔离必需；加性、可空、无 DDL），
+        # schema 形状变化，经 Owner 任务指令授权后重生成基线。
         expected = (
-            "b688da079adcb3ea82cc5a88bfab70d5f1c57c549d3840da46f4faa7f0484f83"
+            "ad64e48383643e237b562ee722988cc1390123b05750f2f1a3687f9c1abf389d"
         )
         assert compute_schema_hash(build_json_schema()) == expected

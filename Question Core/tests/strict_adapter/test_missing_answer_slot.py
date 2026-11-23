@@ -18,8 +18,11 @@ from question_core.contracts.v1 import (
 from question_core.contracts.v1.manifest import build_json_schema, compute_schema_hash
 
 # QCORE-MISSING-ANSWER-SLOT-01 硬约束：validator-only 修复不得改变 JSON Schema
+# 2026-11-23 QCORE-D9-C1-C2-01：QuestionInstance 增加可选 paper_segment_id
+# （D9 C2 身份隔离必需；加性、可空、无 DDL），schema 形状变化，经 Owner 任务
+# 指令授权后重生成基线。旧值 b688da07…。
 SCHEMA_HASH_FROZEN = (
-    "b688da079adcb3ea82cc5a88bfab70d5f1c57c549d3840da46f4faa7f0484f83"
+    "ad64e48383643e237b562ee722988cc1390123b05750f2f1a3687f9c1abf389d"
 )
 
 

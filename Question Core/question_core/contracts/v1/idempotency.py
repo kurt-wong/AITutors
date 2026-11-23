@@ -19,6 +19,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID, uuid4
@@ -26,6 +29,111 @@ from uuid import UUID, uuid4
 from pydantic import Field, model_validator
 
 from .common import ActorId, ContractModel, NoteText, Sha256Hex, utc_now
+
+#: Identity-key schema version. ``qk1_`` = legacy (processing hashes were part
+#: of the identity); ``qk2_`` = source-anchored identity (D9 fix).
+IDENTITY_VERSION = 2
+IDENTITY_KEY_PREFIX = "qk2_"
+LEGACY_IDENTITY_KEY_PREFIX = "qk1_"
+
+#: Dash variants collapse to ``-``; brackets/punctuation are noise in section
+#: labels that drift between processing rounds (see D9 evidence, 2026-11-23).
+_DASH_CHARS = "\u2010\u2011\u2012\u2013\u2014\u2015\uff0d"
+_BRACKET_CHARS = "[]\u3010\u3011()\uff08\uff09<>\u300a\u300b\u3014\u3015\u3008\u3009"
+_TRAILING_PUNCT = ":\uff1a\u3001,\uff0c;\uff1b\u3002\uff0e. "
+
+
+class IdentityAnchorError(ValueError):
+    """The unit cannot be anchored to a stable source identity."""
+
+
+@dataclass(frozen=True)
+class IdentityAnchor:
+    """Stable, source-anchored identity of one Question (D9).
+
+    ``paper_segment_id`` — logical paper inside a PDF (double-paper PDFs must
+    declare segments; a single-paper PDF uses the PDF's paper id).
+    ``section_id`` — ``normalize_section_label(label) + '#' + ordinal``.
+    ``question_numbers`` — the printed question numbers the unit covers, taken
+    from ``question_numbers`` (``printed_number`` is not trustworthy: English
+    composite units store a section-relative number there).
+    ``source_hash`` — the original PDF hash (or upload blob hash). Processing
+    artifacts (manifest / OCR markdown) are deliberately absent.
+    """
+
+    paper_segment_id: str
+    section_id: str
+    question_numbers: tuple[int, ...]
+    source_hash: str
+
+    def as_dict(self) -> dict:
+        return {
+            "paper_segment_id": self.paper_segment_id,
+            "section_id": self.section_id,
+            "question_numbers": list(self.question_numbers),
+            "source_hash": self.source_hash,
+        }
+
+    def validate(self) -> "IdentityAnchor":
+        if not self.paper_segment_id.strip():
+            raise IdentityAnchorError("paper_segment_id is required for identity")
+        if not self.question_numbers:
+            raise IdentityAnchorError(
+                "question_numbers is required for identity; a unit without "
+                "printed question numbers has no stable anchor (D9: do not "
+                "fall back to positional ids)"
+            )
+        if not self.source_hash:
+            raise IdentityAnchorError("source_hash is required for identity")
+        return self
+
+
+def normalize_section_label(label: str | None) -> str:
+    """Canonical form of a section label.
+
+    Measured drift across five manifests of the same paper (2026-11-23):
+    ``【化学—选修3：物质结构与性质】`` / ``[化学-选修5：有机化学基础]`` /
+    ``化学-选修5：有机化学基础`` and empty labels. Normalisation makes the
+    bracketed/half-width/punctuation variants collide; emptiness stays empty
+    (a missing section is a manifest-quality problem, not something identity
+    may paper over with positional guessing).
+    """
+    if not label:
+        return ""
+    s = unicodedata.normalize("NFKC", str(label))
+    for ch in _DASH_CHARS:
+        s = s.replace(ch, "-")
+    for ch in _BRACKET_CHARS:
+        s = s.replace(ch, "")
+    s = re.sub(r"\s+", "", s)
+    return s.rstrip(_TRAILING_PUNCT)
+
+
+def build_section_id(label: str | None, ordinal: int) -> str:
+    """``normalized_label#ordinal`` — ordinal disambiguates repeated labels."""
+    if ordinal < 1:
+        raise IdentityAnchorError(f"section ordinal must be >= 1, got {ordinal}")
+    return f"{normalize_section_label(label)}#{ordinal}"
+
+
+def derive_identity_key(anchor: IdentityAnchor) -> str:
+    """``qk2_`` key: pure function of the source anchor (D9).
+
+    Manifest / OCR markdown / adapter version never enter this key, so
+    re-processing an unchanged source can no longer mint a new Question
+    identity.
+    """
+    anchor.validate()
+    payload = {
+        "identity_version": IDENTITY_VERSION,
+        "paper_segment_id": anchor.paper_segment_id,
+        "section_id": anchor.section_id,
+        "question_numbers": list(anchor.question_numbers),
+        "source_hash": anchor.source_hash,
+    }
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    digest = hashlib.sha256(blob.encode("utf-8")).hexdigest()
+    return f"{IDENTITY_KEY_PREFIX}{digest[:40]}"
 
 
 class InputHashes(ContractModel):
@@ -93,12 +201,15 @@ def derive_idempotency_key(
     source_document_id: str,
     input_hashes: InputHashes,
 ) -> str:
-    """Deterministic idempotency key for a logical source object.
+    """LEGACY ``qk1_`` key — do not use for new Question identities (D9).
 
-    Deliberately excludes ``ingestion_run_id`` and ``adapter_version``: the
-    key identifies *what was imported*, not *which run did it*. Two runs of
-    the same manifest therefore collide on the key and the importer can
-    dedupe, while an adapter upgrade is recorded on the run, not on the key.
+    This is the historical key: it includes ``manifest_hash`` /
+    ``source_md_hash``, so regenerating a manifest mints a brand-new key and
+    the importer creates a duplicate Question. Kept only so historical
+    candidate rows and old fixtures remain readable.
+
+    New ingestion must use :func:`derive_identity_key` (``qk2_``), whose
+    inputs are source-anchored only.
     """
     if input_hashes.is_empty:
         raise ValueError("cannot derive idempotency key without any input hash")
@@ -112,11 +223,18 @@ def derive_idempotency_key(
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     digest = hashlib.sha256(blob.encode("utf-8")).hexdigest()
-    return f"qk1_{digest[:40]}"
+    return f"{LEGACY_IDENTITY_KEY_PREFIX}{digest[:40]}"
 
 
 __all__ = [
+    "IDENTITY_KEY_PREFIX",
+    "IDENTITY_VERSION",
+    "IdentityAnchor",
+    "IdentityAnchorError",
     "IngestionIdentity",
     "InputHashes",
+    "build_section_id",
     "derive_idempotency_key",
+    "derive_identity_key",
+    "normalize_section_label",
 ]

@@ -305,6 +305,7 @@ def main() -> int:
         session_scope,
     )
     from question_core.persistence.exceptions import NotFoundError
+    from .ingest import persist_mapping
 
     settings = DatabaseSettings.from_env()
     engine = create_db_engine(settings)
@@ -314,11 +315,13 @@ def main() -> int:
     for res in admissions:
         if not res.admitted or res.aggregate is None:
             continue
-        cand = None
+        mapping = None
         for m in mappings:
             if m.unit_id == res.unit_id:
-                cand = m.candidate
+                mapping = m
                 break
+        if mapping is None:
+            continue
         tx = {
             "unit_id": res.unit_id,
             "question_id": res.question_id,
@@ -328,17 +331,21 @@ def main() -> int:
         try:
             with session_scope(engine) as session:
                 repo = QuestionCoreRepository(session)
-                try:
-                    existing = repo.get_candidate_by_key(
-                        cand.core.ingestion.candidate_idempotency_key,
-                        ADAPTER_VERSION,
-                    )
-                    tx["status"] = "skipped_duplicate"
-                    tx["existing_candidate_id"] = str(existing.core.candidate_id)
-                except NotFoundError:
-                    repo.save_candidate_with_question(cand, res.aggregate)
-                    tx["status"] = "committed"
-                    tx["candidate_id"] = str(cand.core.candidate_id)
+                # D9：先按源锚解析既有 Question，命中则 skip / 追加 Revision，
+                # 不再因 Manifest 重新生成而整条新建 Question。
+                paper_id = res.aggregate.instances[0].source_document_id
+                record = persist_mapping(repo, mapping, res, paper_id=paper_id)
+                tx.update(
+                    {
+                        "status": record["persist"],
+                        "existing_candidate_id": str(mapping.candidate.core.candidate_id),
+                        "identity_key": record["identity_key"],
+                        "identity_anchor": record["identity_anchor"],
+                    }
+                )
+                if record.get("question_id"):
+                    tx["question_id"] = record["question_id"]
+                if record["persist"] in ("committed_new", "revision_added"):
                     persisted[res.unit_id] = res
         except Exception as exc:  # noqa: BLE001
             tx["status"] = "rolled_back"
@@ -349,8 +356,12 @@ def main() -> int:
         persist_summary["items"].append(tx)
     persist_summary["finished_at"] = now()
     persist_summary["counts"] = {
-        "committed": sum(1 for t in tx_records if t["status"] == "committed"),
-        "skipped_duplicate": sum(1 for t in tx_records if t["status"] == "skipped_duplicate"),
+        "committed": sum(
+            1 for t in tx_records if t["status"] in ("committed_new", "revision_added")
+        ),
+        "skipped_duplicate": sum(
+            1 for t in tx_records if t["status"] == "skipped_duplicate"
+        ),
         "rolled_back": sum(1 for t in tx_records if t["status"] == "rolled_back"),
     }
     write_json(db_log_dir / "02_persistence.json", persist_summary)
@@ -369,13 +380,16 @@ def main() -> int:
 
     with session_scope(readback_engine) as session:
         repo = QuestionCoreRepository(session)
+        tx_by_unit = {t["unit_id"]: t for t in tx_records}
         for res in admissions:
             if not res.admitted or res.aggregate is None:
                 continue
-            item = {"unit_id": res.unit_id, "question_id": res.question_id}
+            tx = tx_by_unit.get(res.unit_id) or {}
+            resolved_qid = tx.get("question_id") or res.question_id
+            item = {"unit_id": res.unit_id, "question_id": resolved_qid}
             try:
                 agg = repo.get_question_aggregate(
-                    __import__("uuid").UUID(res.question_id)
+                    __import__("uuid").UUID(resolved_qid)
                 )
                 item["revisions"] = len(agg.revisions)
                 item["instances"] = len(agg.instances)

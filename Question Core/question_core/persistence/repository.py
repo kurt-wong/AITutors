@@ -36,6 +36,7 @@ from .exceptions import (
     NotFoundError,
     PersistenceError,
 )
+from .identity_resolve import InstanceSlot
 from .models import (
     AnswerRow,
     AssetRefRow,
@@ -461,6 +462,48 @@ class QuestionCoreRepository:
             .order_by(InstanceRow.ordinal, InstanceRow.instance_id)
         ).scalars()
         return tuple(restore_instance(row.payload) for row in rows)
+
+    def list_instance_slots(
+        self, source_document_id: str, paper_segment_id: str | None = None
+    ) -> tuple[InstanceSlot, ...]:
+        """Occurrence facts for D9 identity resolution.
+
+        Scoped to one source document and — when ``paper_segment_id`` is
+        given — to one logical paper segment (D9 C2). Legacy rows without a
+        stored segment are read as the single-segment default
+        ``source_document_id``; that default can only ever match an incoming
+        anchor whose segment *is* the paper id, never an arbitrary segment.
+
+        Reads the denormalised columns plus the stored payload only — no
+        contract restore needed for a lookup that must work on every stored
+        row, including legacy ones.
+        """
+        segment_expr = func.coalesce(
+            InstanceRow.payload["paper_segment_id"].astext,
+            InstanceRow.source_document_id,
+        )
+        stmt = select(
+            InstanceRow.question_id,
+            segment_expr.label("paper_segment_id"),
+            InstanceRow.section,
+            InstanceRow.question_numbers,
+            InstanceRow.ordinal,
+        ).where(InstanceRow.source_document_id == source_document_id)
+        if paper_segment_id is not None:
+            stmt = stmt.where(segment_expr == paper_segment_id)
+        rows = self.session.execute(
+            stmt.order_by(InstanceRow.ordinal, InstanceRow.question_id)
+        ).all()
+        return tuple(
+            InstanceSlot(
+                question_id=row.question_id,
+                paper_segment_id=row.paper_segment_id,
+                section=row.section,
+                question_numbers=tuple(int(n) for n in (row.question_numbers or ())),
+                ordinal=int(row.ordinal),
+            )
+            for row in rows
+        )
 
     def get_question_aggregate(self, question_id: UUID) -> QuestionAggregate:
         """Rebuild the full aggregate; every part is contract-revalidated."""

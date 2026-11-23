@@ -77,9 +77,15 @@ from .evidence import (
     SourceRef,
 )
 from .idempotency import (
+    IDENTITY_KEY_PREFIX,
+    IdentityAnchor,
+    IdentityAnchorError,
     IngestionIdentity,
     InputHashes,
+    build_section_id,
     derive_idempotency_key,
+    derive_identity_key,
+    normalize_section_label,
 )
 from .question import (
     QuestionAggregate,
@@ -205,6 +211,12 @@ __all__ = [
     "compute_schema_hash",
     "content_block_adapter",
     "derive_idempotency_key",
+    "derive_identity_key",
+    "normalize_section_label",
+    "build_section_id",
+    "IdentityAnchor",
+    "IdentityAnchorError",
+    "IDENTITY_KEY_PREFIX",
     "new_id",
     "new_revision",
     "publish_revision",
