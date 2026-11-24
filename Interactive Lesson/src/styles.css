@@ -138,6 +138,14 @@ textarea {
   font-size: 1rem;
 }
 
+/* 字幕：无 TTS 轮次用文本字幕跟随步骤，保持可读、可选中 */
+.step-subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
 /* 公式：块级公式与超宽公式只在自己容器里横向滚动 */
 .math-text {
   min-width: 0;

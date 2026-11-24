@@ -233,6 +233,9 @@ export function LessonPlayer({ bundle, reducedMotion }: LessonPlayerProps) {
 
         <div className="step-caption">
           <p className="step-goal">{currentStep.goal}</p>
+          <p className="step-subtitle" data-testid="step-subtitle">
+            {currentStep.subtitle}
+          </p>
         </div>
       </div>
 
