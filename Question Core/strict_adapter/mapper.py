@@ -3013,6 +3013,13 @@ def _composite_bodies_and_materials(
     # M1/M2: material ranges may overlap sub-question ranges in the frozen
     # manifest.  A sub-question line is owned by that sub-question, never by
     # the shared material; trim only the overlapping source ranges.
+    #
+    # 例外（七选五 材料正文丢失修复，2026-11-24）：小问**完全落在材料区间内**时，
+    # 该小问只是材料段落里的一个空位（blank），正文由材料承载、小问保留结构占位
+    # （见下方 shared_material_sub_placeholders）。此时若仍把小问行区从材料中
+    # 裁掉，材料与小问都不会输出这些源行 → 整段短文静默丢失
+    # （七选五：材料 177-189 覆盖小问 179/181/183/187/189，裁切后只剩标题）。
+    # 因此仅对「部分越出材料区间」的小问做裁切；完全包含者留给材料。
     _decl_sub_ranges = [
         (int(sq["line_start"]), int(sq["line_end"]))
         for sq in (subs_decl or [])
@@ -3033,8 +3040,20 @@ def _composite_bodies_and_materials(
                 f"{unit_id}: material {mid!r} illegal lines {s!r},{e!r} (input_contract_gap)"
             )
         if _decl_sub_ranges:
+            # 完全落在本材料内的小问是「空位」，不得从材料中裁掉（见上方例外说明）。
+            _trim_ranges = [
+                (a, b) for (a, b) in _decl_sub_ranges if not (s <= a and b <= e)
+            ]
+            _kept_inside = [
+                (a, b) for (a, b) in _decl_sub_ranges if s <= a and b <= e
+            ]
+            if _kept_inside:
+                log.setdefault("material_sub_overlap_kept", []).append(
+                    {"material_id": mid, "line_start": s, "line_end": e,
+                     "kept_sub_ranges": [list(x) for x in _kept_inside]}
+                )
             _mraw_blocks = []
-            for _a, _b in _gap_ranges((s, e), _decl_sub_ranges):
+            for _a, _b in _gap_ranges((s, e), _trim_ranges):
                 _mraw_blocks.extend(extract_range(ctx.lines, _a, _b).blocks)
             if _mraw_blocks != list(extract_range(ctx.lines, s, e).blocks):
                 log.setdefault("material_sub_overlap_trimmed", []).append(
