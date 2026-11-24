@@ -60,6 +60,9 @@ def test_decision_ambiguous_when_margins_are_thin() -> None:
 def test_decision_low_confidence_and_no_match() -> None:
     low = {"score": 0.2, "match_evidence": [], "llm": None}
     assert _decide([low], llm_enabled=False, llm_error=None)["decision"] == "low_confidence"
+    # Real-phone handwriting/noise can score ~0.35; it must stay non-clickable.
+    noisy = {"score": 0.40, "match_evidence": [], "llm": None}
+    assert _decide([noisy], llm_enabled=False, llm_error=None)["decision"] == "low_confidence"
     assert _decide([], llm_enabled=False, llm_error=None)["decision"] == "no_match"
 
 

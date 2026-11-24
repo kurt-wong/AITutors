@@ -36,6 +36,12 @@ describe('buildBundleUrl', () => {
     );
   });
 
+  it('appends the short-lived access token when provided', () => {
+    expect(buildBundleUrl('http://api', 'q', 'r', 'zh-CN', 'tok.en')).toBe(
+      'http://api/api/teaching-bundles/q?revision_id=r&language=zh-CN&access_token=tok.en',
+    );
+  });
+
   it('omits revision_id when absent', () => {
     expect(buildBundleUrl('http://api', 'q', null)).toBe(
       'http://api/api/teaching-bundles/q?language=zh-CN',

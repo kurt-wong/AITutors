@@ -12,10 +12,12 @@ npm run dev -- --port 8821        # 开发/验收
 npm run build                     # 产物在 dist/（可静态托管）
 ```
 
-访问：`http://127.0.0.1:8821/?question_id=<uuid>&revision_id=<uuid>&api=http://127.0.0.1:8820`
+访问：`http://127.0.0.1:8821/?question_id=<uuid>&revision_id=<uuid>&api=http://127.0.0.1:8820&access_token=<短期令牌>`
 
 - `question_id` 必填；`revision_id` 建议携带，服务端会校验它是当前 published revision，
   不一致返回 409（旧 revision 的脚本仍可追溯，但不作为当前讲题播放）。
+- `access_token` 由 Teaching Bundle 服务端的 `/api/lesson-access` 签发，只对单题 + 单 revision
+  有效、默认 15 分钟；缺失/过期/跨题都会 401，播放器不挂载。
 - `api` 缺省 `http://127.0.0.1:8820`。
 
 ## 2. 数据来源

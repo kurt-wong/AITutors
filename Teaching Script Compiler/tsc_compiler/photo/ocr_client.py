@@ -97,6 +97,7 @@ def ocr_bytes(
     payload_extra: dict[str, Any] | None = None,
     poll_seconds: float = 2.0,
     timeout_seconds: float = 240.0,
+    max_attempts: int = 2,
 ) -> dict[str, Any]:
     """Submit one image/PDF; return ``{status, text, pages, job_id, duration_s}``."""
     token = _token(settings)
@@ -112,7 +113,7 @@ def ocr_bytes(
     started = time.time()
     last_error = "unknown"
     session = _session(settings)
-    for attempt in range(1, 3):
+    for attempt in range(1, max(1, max_attempts) + 1):
         try:
             response = session.post(
                 settings.ocr_job_url,
@@ -177,7 +178,7 @@ def ocr_bytes(
         "status": "failed",
         "engine": settings.ocr_model,
         "error": last_error,
-        "attempts": 2,
+        "attempts": max(1, max_attempts),
         "duration_s": round(time.time() - started, 1),
     }
 

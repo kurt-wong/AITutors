@@ -104,6 +104,7 @@ def settings(tmp_path: Path) -> Settings:
         llm_rerank=False,
         llm_api_key="",
         ocr_token="",
+        require_auth=False,
     )
 
 

@@ -30,11 +30,13 @@ export function buildBundleUrl(
   questionId: string,
   revisionId: string | null | undefined,
   language: string = DEFAULT_LANGUAGE,
+  accessToken?: string | null,
 ): string {
   const base = apiBase.replace(/\/+$/, '');
   const query = new URLSearchParams();
   if (revisionId) query.set('revision_id', revisionId);
   query.set('language', language);
+  if (accessToken) query.set('access_token', accessToken);
   return `${base}/api/teaching-bundles/${encodeURIComponent(questionId)}?${query.toString()}`;
 }
 
@@ -43,6 +45,7 @@ export interface FetchBundleOptions {
   questionId: string;
   revisionId?: string | null;
   language?: string;
+  accessToken?: string | null;
   signal?: AbortSignal;
   /** 测试注入点；缺省使用全局 fetch。 */
   fetchImpl?: typeof fetch;
@@ -59,6 +62,7 @@ export async function fetchTeachingBundle(options: FetchBundleOptions): Promise<
     options.questionId,
     options.revisionId,
     options.language ?? DEFAULT_LANGUAGE,
+    options.accessToken,
   );
 
   let response: Response;

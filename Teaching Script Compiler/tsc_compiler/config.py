@@ -69,6 +69,12 @@ class Settings:
     ocr_job_url: str = "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
     ocr_model: str = "PaddleOCR-VL-1.6"
     ocr_proxy: str = "http://127.0.0.1:58182"
+    ocr_timeout_s: float = 120.0
+    ocr_max_attempts: int = 3
+    service_token: str = ""
+    signing_secret: str = ""
+    require_auth: bool = True
+    lesson_token_ttl_s: int = 900
     cors_origins: tuple[str, ...] = (
         "http://127.0.0.1:3000",
         "http://localhost:3000",
@@ -104,6 +110,12 @@ def load_settings() -> Settings:
         ),
         ocr_model=_env("TSC_OCR_MODEL", "PaddleOCR-VL-1.6"),
         ocr_proxy=_env("TSC_OCR_PROXY", "http://127.0.0.1:58182"),
+        ocr_timeout_s=float(_env("TSC_OCR_TIMEOUT", "120") or 120),
+        ocr_max_attempts=int(_env("TSC_OCR_ATTEMPTS", "3") or 3),
+        service_token=_env("TSC_SERVICE_TOKEN"),
+        signing_secret=_env("TSC_SIGNING_SECRET"),
+        require_auth=_bool(_env("TSC_REQUIRE_AUTH", "on"), True),
+        lesson_token_ttl_s=int(_env("TSC_LESSON_TOKEN_TTL", "900") or 900),
     )
 
 

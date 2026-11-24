@@ -40,6 +40,7 @@ export default function App() {
       apiBase: params.apiBase,
       questionId: params.questionId,
       revisionId: params.revisionId,
+      accessToken: params.accessToken,
       signal: controller.signal,
     })
       .then((bundle) => {

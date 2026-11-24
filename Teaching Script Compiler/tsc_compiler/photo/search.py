@@ -31,7 +31,10 @@ _INDEX_CACHE: dict[str, Any] = {"stamp": None, "index": None}
 
 HIGH_SCORE = 0.68
 HIGH_MARGIN = 0.08
-AMBIGUOUS_FLOOR = 0.30
+# Real-phone handwriting/noise routinely lands around 0.30–0.40; that must not
+# become a clickable "did you mean" candidate. Genuine ambiguous exam photos in
+# the formal audit sit at 0.59–0.66, so the stricter floor keeps them intact.
+AMBIGUOUS_FLOOR = 0.45
 CANDIDATE_FLOOR = 0.12
 LLM_CANDIDATES = 5
 

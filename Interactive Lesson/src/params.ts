@@ -6,6 +6,7 @@ export interface LessonParams {
   questionId: string | null;
   revisionId: string | null;
   apiBase: string;
+  accessToken: string | null;
   reducedMotion: boolean;
 }
 
@@ -19,12 +20,14 @@ export function parseLessonParams(
   const apiBase = params.get('api')?.trim();
   const questionId = params.get('question_id')?.trim() || null;
   const revisionId = params.get('revision_id')?.trim() || null;
+  const accessToken = params.get('access_token')?.trim() || null;
   const reducedMotionRaw = params.get('reducedMotion')?.trim().toLowerCase() ?? '';
 
   return {
     questionId,
     revisionId,
     apiBase: apiBase || defaultApiBase,
+    accessToken,
     reducedMotion: TRUTHY_FLAGS.has(reducedMotionRaw),
   };
 }
