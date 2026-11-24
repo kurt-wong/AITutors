@@ -69,10 +69,12 @@ def main() -> int:
             }
         )
     payload = {
-        "title": "EULER-STYLE-INTERACTIVE-LESSON-PILOT-01 candidate acceptance set",
-        "status": "candidate_pending_owner",
+        "title": "EULER-STYLE-INTERACTIVE-LESSON-PILOT-01 formal acceptance set",
+        "status": "owner_confirmed",
+        "confirmed_at": "2026-11-24T23:34:55+08:00",
+        "confirmed_by": "Owner",
         "note": (
-            "候选 20 题，尚未由 Owner 确认；DSH 不得在报告中把它冒充为正式验收集。"
+            "Owner 于 2026-11-24 确认该 20 题为正式验收清单；"
             "题目事实来源：QCore published Revision；此处只记录 id 与属性，不含题干/答案。"
         ),
         "count": len(items),
