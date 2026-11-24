@@ -57,7 +57,14 @@ def _hydrate_explanation_block(block: Any) -> Any:
 
 
 def restore_revision(payload: dict[str, Any]) -> Revision:
-    """Rebuild a Revision from its stored payload, re-running validation."""
+    """Rebuild a Revision from its stored payload, re-running validation.
+
+    A second, explicitly-opted-in validation pass accepts the pre-S02-R1
+    hash binding (``OptionItem.source_label`` did not exist yet, so the
+    canonical blob lacked that key).  Only the hash check is relaxed; every
+    other contract rule still runs on the retry, and the stored hash must
+    equal the legacy canonical hash to be accepted.
+    """
     data = dict(payload)
     blocks = data.get("explanation_blocks") or []
     data["explanation_blocks"] = [
@@ -66,9 +73,14 @@ def restore_revision(payload: dict[str, Any]) -> Revision:
     try:
         return Revision.model_validate(data)
     except Exception as exc:  # noqa: BLE001 - surface as persistence error
-        raise ContractViolationError(
-            f"stored revision payload failed contract validation: {exc}"
-        ) from exc
+        try:
+            return Revision.model_validate(
+                data, context={"legacy_content_hash": True}
+            )
+        except Exception:  # noqa: BLE001 - legacy retry also failed
+            raise ContractViolationError(
+                f"stored revision payload failed contract validation: {exc}"
+            ) from exc
 
 
 def restore_candidate(payload: dict[str, Any]) -> Candidate:
@@ -115,13 +127,21 @@ def restore_aggregate(
     instances: tuple[QuestionInstance, ...],
     state_history: tuple[StateSnapshot, ...],
 ) -> QuestionAggregate:
-    """Assemble a QuestionAggregate and re-run its consistency rules."""
+    """Assemble a QuestionAggregate and re-run its consistency rules.
+
+    The aggregate re-validates its revisions, so it carries the same
+    pre-S02-R1 hash compatibility as :func:`restore_revision` (a stored
+    legacy hash is still verified, against the stripped serialization).
+    """
     try:
-        return QuestionAggregate(
-            identity=identity,
-            revisions=revisions,
-            instances=instances,
-            state_history=state_history,
+        return QuestionAggregate.model_validate(
+            {
+                "identity": identity,
+                "revisions": list(revisions),
+                "instances": list(instances),
+                "state_history": list(state_history),
+            },
+            context={"legacy_content_hash": True},
         )
     except Exception as exc:  # noqa: BLE001
         raise ContractViolationError(

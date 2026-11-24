@@ -362,6 +362,57 @@ def canonical_content_hash(*models: "ContractModel") -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
+def _strip_source_label(obj):
+    """Recursively drop the additive ``source_label`` key from a JSON dump."""
+    if isinstance(obj, list):
+        return [_strip_source_label(item) for item in obj]
+    if isinstance(obj, dict):
+        return {
+            key: _strip_source_label(value)
+            for key, value in obj.items()
+            if key != "source_label"
+        }
+    return obj
+
+
+def canonical_content_hash_pre_source_label(*models: "ContractModel") -> str:
+    """Canonical hash under the serialization used before S02 R1.
+
+    S02 R1 (2026-11-23) added the optional ``OptionItem.source_label`` field
+    so a cloze option keeps the printed question number it came from.  The
+    field is additive and defaults to ``None``, but ``model_dump(mode="json")``
+    now emits ``"source_label": null`` for every option, which changes the
+    canonical blob and therefore the hash.  Revisions appended *before* that
+    change were hashed without the key, so re-validating them with the
+    current algorithm reports a hash binding failure even though their
+    content is intact.
+
+    This helper reproduces the pre-R1 serialization by stripping exactly that
+    one key and re-hashing.  It is the *read* compatibility path for legacy
+    rows only: every new revision is still hashed with
+    :func:`canonical_content_hash`, and :class:`Revision` only accepts the
+    legacy binding when the caller explicitly opts in
+    (``validation context {"legacy_content_hash": True}``).
+    """
+    import hashlib
+    import json as _json
+
+    if not models:
+        raise ValueError(
+            "canonical_content_hash_pre_source_label requires at least one model"
+        )
+    payload = [
+        _strip_source_label(m.model_dump(mode="json")) for m in models
+    ]
+    blob = _json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -395,6 +446,7 @@ __all__ = [
     "Visibility",
     "UnsafeModelCopyError",
     "canonical_content_hash",
+    "canonical_content_hash_pre_source_label",
     "new_id",
     "utc_now",
 ]

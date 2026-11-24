@@ -11,9 +11,11 @@ from question_core.contracts.v1 import (
     MathBlock,
     TextBlock,
     canonical_content_hash,
+    canonical_content_hash_pre_source_label,
     compute_schema_hash,
     build_json_schema,
 )
+from question_core.contracts.v1.question import Revision
 from question_core.persistence.exceptions import ContractViolationError
 from question_core.persistence.serialize import (
     dump_contract,
@@ -188,6 +190,82 @@ class TestAggregateSerialization:
         table = rich.content.materials[0].blocks[1]
         assert table.n_rows == 2 and table.n_cols == 2
         assert table.cells[0].rowspan == 2
+
+
+class TestPreSourceLabelCompatibility:
+    """S02 R1 added OptionItem.source_label; pre-R1 rows were hashed without it.
+
+    Reading those rows must keep working without weakening the binding: the
+    legacy hash is only accepted when it verifies against the stripped
+    serialization, and normal construction stays strict.
+    """
+
+    @staticmethod
+    def _strip(obj):
+        if isinstance(obj, list):
+            return [TestPreSourceLabelCompatibility._strip(x) for x in obj]
+        if isinstance(obj, dict):
+            return {
+                k: TestPreSourceLabelCompatibility._strip(v)
+                for k, v in obj.items()
+                if k != "source_label"
+            }
+        return obj
+
+    def _legacy_payload(self):
+        rev = make_rich_revision(QID)
+        legacy_hash = canonical_content_hash_pre_source_label(
+            rev.content, *rev.answers, *rev.explanation_blocks
+        )
+        payload = self._strip(_json_roundtrip(dump_contract(rev)))
+        payload["content_hash"] = legacy_hash
+        body_idx = next(
+            i for i, b in enumerate(payload["content"]["bodies"]) if b.get("options")
+        )
+        return rev, payload, legacy_hash, body_idx
+
+    def test_legacy_payload_restores_with_stripped_binding(self):
+        rev, payload, legacy_hash, body_idx = self._legacy_payload()
+        assert legacy_hash != canonical_content_hash(
+            rev.content, *rev.answers, *rev.explanation_blocks
+        ), "the fixture must exercise the pre-R1 serialization"
+        restored = restore_revision(payload)
+        assert restored.content_hash == legacy_hash
+        # every substantive field survives; only the additive key is absent
+        assert restored.content.bodies[body_idx].options[0].label == (
+            rev.content.bodies[body_idx].options[0].label
+        )
+        assert restored.content.bodies[body_idx].options[0].source_label is None
+
+    def test_legacy_payload_rejected_without_explicit_context(self):
+        _, payload, _, _ = self._legacy_payload()
+        from pydantic import ValidationError
+
+        from question_core.persistence.serialize import _hydrate_explanation_block
+
+        direct = dict(payload)
+        direct["explanation_blocks"] = [
+            _hydrate_explanation_block(b)
+            for b in direct.get("explanation_blocks") or []
+        ]
+        with pytest.raises(ValidationError):
+            Revision.model_validate(direct)
+
+    def test_legacy_binding_does_not_hide_content_tampering(self):
+        _, payload, _, body_idx = self._legacy_payload()
+        # change an option text but keep the legacy hash
+        payload["content"]["bodies"][body_idx]["options"][0]["blocks"][0][
+            "text"
+        ] = "被篡改的选项"
+        with pytest.raises(ContractViolationError):
+            restore_revision(payload)
+
+    def test_current_hash_round_trip_unchanged(self):
+        rev = make_rich_revision(QID)
+        restored = restore_revision(_json_roundtrip(dump_contract(rev)))
+        assert restored.content_hash == canonical_content_hash(
+            rev.content, *rev.answers, *rev.explanation_blocks
+        )
 
 
 class TestSchemaBaselineUntouched:

@@ -161,6 +161,128 @@ class TestR1Counterexamples:
         out = audit_unit(rec)
         assert out["status"] == "ok", out["problems"]
 
+    @staticmethod
+    def _range_record(src: str) -> dict:
+        """One option span (2..6) with a non-option line at position 4."""
+        return {
+            "unit_id": "T-THEMATIC-BREAK",
+            "source_lines": src.split("\n"),
+            "source_line_count": len(src.split("\n")),
+            "manifest_option_lines": [(2, 6)],
+            "options": [
+                {"label": lb,
+                 "blocks": [{"kind": "text", "text": t,
+                             "line_start": ln, "line_end": ln}],
+                 "line_start": ln, "line_end": ln}
+                for lb, t, ln in (("A", "甲", 2), ("B", "乙", 3),
+                                  ("C", "丙", 5), ("D", "丁", 6))
+            ],
+            "stem_blocks": [
+                {"kind": "text", "text": "题干", "line_start": 1,
+                 "line_end": 1},
+            ],
+            "material_blocks": [],
+            "explanation_blocks": [],
+            "options_shape": "option_items",
+        }
+
+    def test_11_manifest_span_crossing_thematic_break_passes(self):
+        """2022 English U14: option D span 379–403 crosses a ``---`` line.
+
+        A Markdown thematic break is layout, not option text; rule B must not
+        demand coverage for it (same treatment as a blank line).
+        """
+        rec = self._range_record("题干\nA. 甲\nB. 乙\n---\nC. 丙\nD. 丁")
+        out = audit_unit(rec)
+        assert out["status"] == "ok", out["problems"]
+
+    def test_12_real_uncovered_line_inside_span_still_blocked(self):
+        """The separator exemption must stay narrow: real text is still a gap."""
+        rec = self._range_record("题干\nA. 甲\nB. 乙\nE. 戊\nC. 丙\nD. 丁")
+        out = audit_unit(rec)
+        assert out["status"] == "FAIL"
+        assert any("not covered by option blocks" in p for p in out["problems"])
+
+
+class TestDuplicateTextRule:
+    """C1 duplicate gate is about the same source line extracted twice."""
+
+    @staticmethod
+    def _content(stem_blocks, option_blocks=(), material_blocks=()):
+        from types import SimpleNamespace
+
+        bodies = [
+            SimpleNamespace(
+                stem_blocks=tuple(stem_blocks),
+                options=tuple(
+                    SimpleNamespace(blocks=(b,)) for b in option_blocks
+                ),
+            )
+        ]
+        materials = [SimpleNamespace(blocks=tuple(material_blocks))]
+        return SimpleNamespace(bodies=bodies, materials=materials)
+
+    @staticmethod
+    def _block(text, ls=None, le=None):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(text=text, line_start=ls, line_end=le)
+
+    def test_same_line_twice_is_flagged(self):
+        from strict_adapter.content_audit import duplicate_text_lines
+
+        text = "一" * 25
+        content = self._content(
+            [self._block(text, 10, 10)],
+            option_blocks=[self._block(text, 10, 10)],
+        )
+        assert duplicate_text_lines(content)
+
+    def test_overlapping_ranges_are_flagged(self):
+        """Materials split from one region both contain the shared line."""
+        from strict_adapter.content_audit import duplicate_text_lines
+
+        text = "一" * 25
+        content = self._content(
+            [],
+            material_blocks=[
+                self._block(text, 93, 95),
+                self._block(text, 93, 108),
+            ],
+        )
+        assert duplicate_text_lines(content)
+
+    def test_same_text_on_different_source_lines_is_not_a_defect(self):
+        """2022 English U11: an option quotes a website printed in the passage."""
+        from strict_adapter.content_audit import duplicate_text_lines
+
+        text = "www.shermancymru.co.uk"
+        content = self._content(
+            [],
+            option_blocks=[self._block(text, 247, 247)],
+            material_blocks=[self._block(text, 211, 211)],
+        )
+        assert duplicate_text_lines(content) == []
+
+    def test_missing_locator_is_fail_closed(self):
+        from strict_adapter.content_audit import duplicate_text_lines
+
+        text = "一" * 25
+        content = self._content(
+            [self._block(text)],
+            option_blocks=[self._block(text, 10, 10)],
+        )
+        assert duplicate_text_lines(content)
+
+    def test_short_text_is_ignored(self):
+        from strict_adapter.content_audit import duplicate_text_lines
+
+        content = self._content(
+            [self._block("short", 1, 1)],
+            option_blocks=[self._block("short", 1, 1)],
+        )
+        assert duplicate_text_lines(content) == []
+
 
 # ---------------------------------------------------------------------------
 # 第 2/3 组：正式唯一入口与导入路径门禁（真实封存输入）

@@ -3248,11 +3248,16 @@ def _composite_bodies_and_materials(
                     log.setdefault("shared_material_sub_placeholders", []).append(sid)
         if sid in _sub_options:
             # 该子问拥有选项组：选项由 body.options 渲染一次，正文不得重复保留。
+            _sub_opts = _sub_options[sid]
             sraw = _drop_option_line_blocks(
                 sraw,
-                [(o.line_start, o.line_end) for o in _sub_options[sid]],
+                [(o.line_start, o.line_end) for o in _sub_opts],
                 log,
                 f"{base}/{sid}/stem",
+                option_texts=[
+                    "".join(getattr(ob, "text", "") or "" for ob in o.blocks).strip()
+                    for o in _sub_opts
+                ],
             )
         blocks = _blocks_from_raw(sraw, asset_sink, ctx, f"{base}/{sid}", log)
         if not blocks:
@@ -3785,16 +3790,28 @@ def _clamp_option_spans(specs: list, lines: list, log: dict | None, unit_id) -> 
     return [by_label.get(s["label"], s) for s in specs]
 
 
-def _drop_option_line_blocks(raw: list, spans: list, log: dict | None, where: str) -> list:
+def _drop_option_line_blocks(
+    raw: list,
+    spans: list,
+    log: dict | None,
+    where: str,
+    option_texts: list[str] | None = None,
+) -> list:
     """题面里不得再保留已声明为选项的源行（否则 options 与 stem 各存一份）。
 
     只丢弃「整块落在某个选项跨度内、且文本以选项标号开头或为空」的文本块；
     部分重叠或非选项样式的块一律保留（fail-open，登记待复核）。
+
+    S02 R1 追加：完形 ``（1）A.ownership B.…`` 这种「小问标号 + 同行选项」
+    的版式，文本以 ``（1）`` 开头而不以 ``A.`` 开头。给定 ``option_texts``
+    时，若整块位于选项跨度内且包含该组全部选项文本，则只保留第一个选项
+    标号之前的标号前缀（``（1）``），选项正文由 OptionItem 承载一次。
     """
     ranges = [(int(a), int(b)) for a, b in spans if a is not None and b is not None]
     if not ranges:
         return raw
-    kept, dropped = [], []
+    opts = [t for t in (option_texts or []) if t]
+    kept, dropped, trimmed = [], [], []
     for b in raw:
         a, z = b.get("line_start"), b.get("line_end")
         if not isinstance(a, int):
@@ -3806,9 +3823,31 @@ def _drop_option_line_blocks(raw: list, spans: list, log: dict | None, where: st
         if inside and (not txt.strip() or _OPT_LABEL_PREFIX_RE.match(txt)):
             dropped.append({"line_start": a, "line_end": z, "text": txt.strip()[:80]})
             continue
+        if (
+            inside
+            and b.get("kind") == "text"
+            and opts
+            and all(t in txt for t in opts)
+        ):
+            first = next(_OPT_INLINE_LABEL.finditer(txt), None)
+            prefix = txt[: first.start(1)].strip() if first else ""
+            if prefix:
+                kept.append({**b, "text": prefix})
+                trimmed.append(
+                    {"line_start": a, "line_end": z, "kept_prefix": prefix[:40]}
+                )
+                continue
+            dropped.append({"line_start": a, "line_end": z, "text": txt.strip()[:80]})
+            continue
         kept.append(b)
     if dropped and log is not None:
-        log.setdefault("option_lines_removed_from_stem", []).append({"where": where, "blocks": dropped})
+        log.setdefault("option_lines_removed_from_stem", []).append(
+            {"where": where, "blocks": dropped}
+        )
+    if trimmed and log is not None:
+        log.setdefault("option_text_trimmed_from_stem", []).append(
+            {"where": where, "blocks": trimmed}
+        )
     return kept
 
 

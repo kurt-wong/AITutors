@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, model_validator
 
 from .answer import TypedAnswer
 from .common import (
@@ -34,6 +34,7 @@ from .common import (
     Sha256Hex,
     Visibility,
     canonical_content_hash,
+    canonical_content_hash_pre_source_label,
     new_id,
     utc_now,
 )
@@ -77,7 +78,7 @@ class Revision(ContractModel):
     change_note: NoteText | None = None
 
     @model_validator(mode="after")
-    def _state_binding(self) -> "Revision":
+    def _state_binding(self, info: ValidationInfo) -> "Revision":
         # F4: content_hash must be verifiable — it is the canonical hash of
         # the revision's substantive content (question body + answers +
         # explanation), not an arbitrary string someone happened to store.
@@ -85,11 +86,22 @@ class Revision(ContractModel):
             self.content, *self.answers, *self.explanation_blocks
         )
         if self.content_hash != expected:
-            raise ValueError(
-                "content_hash must equal canonical_content_hash(content, "
-                "answers, explanation_blocks); the approval binding depends "
-                "on this being verifiable"
-            )
+            # Read compatibility for rows appended before S02 R1 added the
+            # optional OptionItem.source_label field: they were hashed
+            # without that key.  The persistence layer opts in explicitly
+            # (validation context); normal construction stays strict.
+            context = getattr(info, "context", None) or {}
+            legacy_expected = None
+            if context.get("legacy_content_hash"):
+                legacy_expected = canonical_content_hash_pre_source_label(
+                    self.content, *self.answers, *self.explanation_blocks
+                )
+            if legacy_expected is None or self.content_hash != legacy_expected:
+                raise ValueError(
+                    "content_hash must equal canonical_content_hash(content, "
+                    "answers, explanation_blocks); the approval binding depends "
+                    "on this being verifiable"
+                )
         if self.state is not None:
             if self.state.revision_id != self.revision_id:
                 raise ValueError("state.revision_id must equal revision.revision_id")

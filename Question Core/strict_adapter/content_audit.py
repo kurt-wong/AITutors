@@ -52,6 +52,14 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip()
 
 
+#: Markdown thematic breaks are layout separators, not question content.  A
+#: Manifest may declare an over-broad option span that crosses one (2022
+#: English U14: option D is declared 379–403 and line 381 is ``---``), so
+#: rule B must not demand option/stem coverage for these lines — the same
+#: way it already skips blank lines.
+_MD_THEMATIC_BREAK = re.compile(r"^(?:-{3,}|\*{3,}|_{3,})$")
+
+
 def _strip_tags(s: str) -> str:
     """剥标签用于溯源比对；`<sub>/<sup>` 先转 `_x`/`^x`，与抽取层保持一致。"""
     s = re.sub(
@@ -182,14 +190,18 @@ def audit_unit(rec: dict[str, Any]) -> dict:
             for ln in range(ls, le + 1):
                 if ln > n_src:
                     continue
-                if not (source_lines and not source_lines[ln - 1].strip()):
-                    in_opt = any(a <= ln <= b for a, b in cov_ranges)
-                    # Owner 2026-11-22（D2）：Manifest 可能把下一小问的题干行
-                    # 误声明为选项行；这些行已由该小问题面消费，不应再要求
-                    # 选项块覆盖（否则正确收窄选项跨度会被判 FAIL）。
-                    in_stem = any(a <= ln <= b for a, b in stem_cov)
-                    if not in_opt and not in_stem:
-                        missing.append(ln)
+                if source_lines and (
+                    not source_lines[ln - 1].strip()
+                    or _MD_THEMATIC_BREAK.match(source_lines[ln - 1].strip())
+                ):
+                    continue
+                in_opt = any(a <= ln <= b for a, b in cov_ranges)
+                # Owner 2026-11-22（D2）：Manifest 可能把下一小问的题干行
+                # 误声明为选项行；这些行已由该小问题面消费，不应再要求
+                # 选项块覆盖（否则正确收窄选项跨度会被判 FAIL）。
+                in_stem = any(a <= ln <= b for a, b in stem_cov)
+                if not in_opt and not in_stem:
+                    missing.append(ln)
         if missing:
             problems.append(
                 f"B: manifest option lines not covered by option blocks: {missing}")
@@ -202,7 +214,10 @@ def audit_unit(rec: dict[str, Any]) -> dict:
             for ln in range(ls, le + 1):
                 if ln > n_src:
                     continue
-                if source_lines and not source_lines[ln - 1].strip():
+                if source_lines and (
+                    not source_lines[ln - 1].strip()
+                    or _MD_THEMATIC_BREAK.match(source_lines[ln - 1].strip())
+                ):
                     continue
                 if not any(a <= ln <= (b or a) for a, b in cov):
                     missing.append(ln)
@@ -290,26 +305,57 @@ def duplicate_text_lines(content, min_len: int = 20) -> list[dict]:
     "图1""A.""---" 这类短标签算成重复。`content` 为 QuestionContent
     （.bodies/.materials）。返回原始文本供降级日志与复核使用；调用方负责
     把 COMPLETE 降级为 INCOMPLETE（fail-closed，不删除内容）。
-    """
-    from collections import Counter
 
-    texts: list[str] = []
+    "同一行"按**源行区间**判定：只有两条文本来自同一/重叠源行区间才算抽取
+    重复（C1 四个已裁决案例——材料拆分、父子小问、C/E 同源行——均属此类）；
+    同一字符串出现在**不同源行**是源文重复（如阅读理解选项引用材料中的
+    网址），不是数字化缺陷，不降级。缺少行定位的块按 fail-closed 仍算重复。
+    """
+    entries: list[tuple[str, str, tuple[int, int] | None]] = []
+
+    def add(block) -> None:
+        raw = getattr(block, "text", "") or ""
+        if not raw.strip():
+            return
+        norm = re.sub(r"\s+", "", raw)
+        if len(norm) < min_len:
+            return
+        ls = getattr(block, "line_start", None)
+        le = getattr(block, "line_end", None)
+        span = (int(ls), int(le if le is not None else ls)) if ls is not None else None
+        entries.append((raw, norm, span))
+
     for b in content.bodies:
-        texts += [getattr(x, "text", "") or "" for x in b.stem_blocks]
+        for x in b.stem_blocks:
+            add(x)
         for o in b.options:
-            texts += [getattr(x, "text", "") or "" for x in o.blocks]
+            for x in o.blocks:
+                add(x)
     for m in content.materials:
-        texts += [getattr(x, "text", "") or "" for x in m.blocks]
-    norm = [(t, re.sub(r"\s+", "", t)) for t in texts if t and t.strip()]
-    counter = Counter(n for _, n in norm if len(n) >= min_len)
-    dup = {k: v for k, v in counter.items() if v > 1}
-    if not dup:
-        return []
-    out, seen = [], set()
-    for raw, n in norm:
-        if len(n) >= min_len and n in dup and n not in seen:
-            seen.add(n)
-            out.append({"count": dup[n], "text": raw.strip()[:160]})
+        for x in m.blocks:
+            add(x)
+
+    by_norm: dict[str, list[tuple[str, tuple[int, int] | None]]] = {}
+    for raw, norm, span in entries:
+        by_norm.setdefault(norm, []).append((raw, span))
+
+    def overlaps(a: tuple[int, int] | None, b: tuple[int, int] | None) -> bool:
+        if a is None or b is None:
+            return True  # 无定位：无法证明来源不同 → fail-closed
+        return not (a[1] < b[0] or b[1] < a[0])
+
+    out = []
+    for norm, occ in by_norm.items():
+        if len(occ) < 2:
+            continue
+        hit = any(
+            overlaps(occ[i][1], occ[j][1])
+            for i in range(len(occ))
+            for j in range(i + 1, len(occ))
+        )
+        if not hit:
+            continue
+        out.append({"count": len(occ), "text": occ[0][0].strip()[:160]})
     return out
 
 

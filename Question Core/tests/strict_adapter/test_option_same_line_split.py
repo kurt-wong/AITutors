@@ -33,3 +33,71 @@ def test_single_option_line_is_unchanged():
     by = {o["label"]: "".join(b.get("text", "") for b in o["blocks"]).strip() for o in out}
     # independent ranges keep the printed label; stripping happens at the body layer
     assert by == {"A": "A. only", "B": "B. second"}
+
+
+# ---------------------------------------------------------------------------
+# Sub-label + same-line options (2022 全国甲卷 完形 U16: ``（1）A.ownership …``)
+# ---------------------------------------------------------------------------
+
+
+def test_sublabel_and_options_on_one_line_keep_only_printed_label():
+    from strict_adapter.mapper import _drop_option_line_blocks
+
+    raw = [
+        {
+            "kind": "text",
+            "text": "（1）A.ownership B.membership C.companionship D.leadership",
+            "line_start": 461,
+            "line_end": 461,
+        }
+    ]
+    log: dict = {}
+    out = _drop_option_line_blocks(
+        raw,
+        [(461, 461)],
+        log,
+        "u16/S1/stem",
+        option_texts=["ownership", "membership", "companionship", "leadership"],
+    )
+    assert [b["text"] for b in out] == ["（1）"]
+    assert out[0]["line_start"] == 461
+    assert log["option_text_trimmed_from_stem"]
+
+
+def test_option_label_line_is_still_dropped():
+    from strict_adapter.mapper import _drop_option_line_blocks
+
+    raw = [{"kind": "text", "text": "A. ownership", "line_start": 461, "line_end": 461}]
+    assert _drop_option_line_blocks(raw, [(461, 461)], None, "u16/S1/stem") == []
+
+
+def test_unrelated_text_inside_option_span_is_kept():
+    from strict_adapter.mapper import _drop_option_line_blocks
+
+    raw = [{"kind": "text", "text": "passage sentence", "line_start": 461, "line_end": 461}]
+    out = _drop_option_line_blocks(
+        raw, [(461, 461)], None, "u/s/stem", option_texts=["ownership"]
+    )
+    assert out == raw
+
+
+def test_partial_option_text_is_not_trimmed():
+    """Only a block that contains the whole option group is the option row."""
+    from strict_adapter.mapper import _drop_option_line_blocks
+
+    raw = [
+        {
+            "kind": "text",
+            "text": "（1）A.ownership only",
+            "line_start": 461,
+            "line_end": 461,
+        }
+    ]
+    out = _drop_option_line_blocks(
+        raw,
+        [(461, 461)],
+        None,
+        "u/s/stem",
+        option_texts=["ownership", "membership", "companionship", "leadership"],
+    )
+    assert out == raw

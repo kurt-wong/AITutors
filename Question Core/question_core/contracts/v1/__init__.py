@@ -32,6 +32,7 @@ from .common import (
     UnsafeModelCopyError,
     Visibility,
     canonical_content_hash,
+    canonical_content_hash_pre_source_label,
     new_id,
     utc_now,
 )
@@ -206,6 +207,7 @@ __all__ = [
     "build_json_schema",
     "build_manifest",
     "canonical_content_hash",
+    "canonical_content_hash_pre_source_label",
     "candidate_adapter",
     "check_single_published",
     "compute_schema_hash",
