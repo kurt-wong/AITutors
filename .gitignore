@@ -9,6 +9,7 @@
 ARCHIVE/
 _dsh_review/
 _dsh/
+_dsh_tmp/
 
 # --- Python ---
 __pycache__/
@@ -101,6 +102,15 @@ runs/
 *.sqlite
 *.sqlite3
 *.duckdb
+
+# --- EULER-STYLE-INTERACTIVE-LESSON-PILOT-01 ---
+# Node toolchain and build output of the two pilot work directories.
+node_modules/
+Teaching Script Compiler/data/
+Teaching Script Compiler/.env.local
+Teaching Script Compiler/.pytest_cache/
+Interactive Lesson/dist/
+Interactive Lesson/coverage/
 
 # --- Negation: allow synthetic test data and tech doc images ---
 !tests/fixtures/**
