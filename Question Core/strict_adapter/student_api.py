@@ -15,10 +15,12 @@
 
 from __future__ import annotations
 
+import os
 import re
+import secrets
 from typing import Callable
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 
 VISIBILITY_RANK = {"review_only": 0, "student_after_submit": 1, "public": 2}
 
@@ -244,6 +246,48 @@ def build_student_list(aggregates) -> list[dict]:
     return out
 
 
+def build_published_bundle(aggregate) -> dict | None:
+    """已发布 Revision 的**服务端**完整包（答案 + 解析 + 资产）。
+
+    仅由 ``/internal/published/{question_id}``（令牌保护、服务端对服务端）使用；
+    浏览器学生视图仍走 :func:`build_student_detail`，visibility 语义不变。
+    """
+    rev = aggregate.published_revision()
+    if rev is None:
+        return None
+    inst = aggregate.instances[0] if aggregate.instances else None
+    content = rev.content
+    return {
+        "question_id": str(aggregate.identity.question_id),
+        "revision_id": str(rev.revision_id),
+        "revision_number": rev.revision_number,
+        "question_type": rev.question_type.value
+        if hasattr(rev.question_type, "value")
+        else rev.question_type,
+        "source_document_id": inst.source_document_id if inst else None,
+        "printed_number": inst.printed_number if inst else None,
+        "content": _content_public(content, with_order_meta=True),
+        # 服务端教学/练习需要标准答案与解析（不是学生视图）：显式全量下发。
+        "answers": _answers_public(rev.answers),
+        "explanation_blocks": [_block_public(b) for b in rev.explanation_blocks],
+        "answer_visibility": rev.answer_visibility.value
+        if hasattr(rev.answer_visibility, "value")
+        else rev.answer_visibility,
+        "explanation_visibility": rev.explanation_visibility.value
+        if hasattr(rev.explanation_visibility, "value")
+        else rev.explanation_visibility,
+        # 含答案区资产：仅服务端消费者（DT 后端/教学脚本）可用。
+        "assets": [
+            {
+                "asset_id": a.asset_id,
+                "storage_path": a.storage_path,
+                "mime_type": a.mime_type,
+            }
+            for a in content.assets
+        ],
+    }
+
+
 def create_student_app(reader: Callable[[], list]) -> FastAPI:
     """reader() → 全部 QuestionAggregate（数据库读取由调用方提供）。"""
     app = FastAPI(title="qcore-student-api", version="0.1.0")
@@ -271,5 +315,36 @@ def create_student_app(reader: Callable[[], list]) -> FastAPI:
                     )
                 return detail
         raise HTTPException(status_code=404, detail="question not available")
+
+    @app.get("/internal/published/{question_id}")
+    def get_published_bundle(
+        question_id: str,
+        x_qcore_internal_token: str | None = Header(default=None),
+    ) -> dict:
+        """服务端到服务端的已发布题包（答案/解析/资产）。
+
+        环境变量 ``QCORE_INTERNAL_TOKEN`` 未配置 → 503（fail-closed，通道关闭）；
+        配置后必须携带 ``X-QCore-Internal-Token`` 且一致 → 否则 401。
+        只服务当前已发布 Revision；未发布/不存在一律 404。
+        """
+        expected = os.environ.get("QCORE_INTERNAL_TOKEN", "").strip()
+        if not expected:
+            raise HTTPException(
+                status_code=503, detail="internal channel disabled"
+            )
+        if not x_qcore_internal_token or not secrets.compare_digest(
+            x_qcore_internal_token, expected
+        ):
+            raise HTTPException(status_code=401, detail="invalid internal token")
+        aggs = reader()
+        for agg in aggs:
+            if str(agg.identity.question_id) == question_id:
+                bundle = build_published_bundle(agg)
+                if bundle is None:
+                    raise HTTPException(
+                        status_code=404, detail="question not published"
+                    )
+                return bundle
+        raise HTTPException(status_code=404, detail="question not published")
 
     return app

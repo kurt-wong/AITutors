@@ -161,3 +161,60 @@ class TestStudentApp:
         r = client.get(f"/student/questions/{pid}?submitted=true")
         assert r.status_code == 200
         assert r.json()["answers"] == []
+
+
+class TestInternalPublishedBundle:
+    """服务端答案通道：令牌保护、只发已发布 Revision。"""
+
+    def test_channel_disabled_without_env(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        monkeypatch.delenv("QCORE_INTERNAL_TOKEN", raising=False)
+        agg = _aggregate("review_only", published=True)
+        client = TestClient(create_student_app(lambda: [agg]))
+        r = client.get(f"/internal/published/{agg.identity.question_id}")
+        assert r.status_code == 503
+
+    def test_token_required(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        monkeypatch.setenv("QCORE_INTERNAL_TOKEN", "t" * 32)
+        agg = _aggregate("review_only", published=True)
+        client = TestClient(create_student_app(lambda: [agg]))
+        r = client.get(f"/internal/published/{agg.identity.question_id}")
+        assert r.status_code == 401
+        r = client.get(
+            f"/internal/published/{agg.identity.question_id}",
+            headers={"X-QCore-Internal-Token": "wrong"},
+        )
+        assert r.status_code == 401
+
+    def test_published_bundle_contains_answers_and_explanation(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        monkeypatch.setenv("QCORE_INTERNAL_TOKEN", "t" * 32)
+        agg = _aggregate("review_only", published=True)
+        client = TestClient(create_student_app(lambda: [agg]))
+        r = client.get(
+            f"/internal/published/{agg.identity.question_id}",
+            headers={"X-QCore-Internal-Token": "t" * 32},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["question_id"] == str(agg.identity.question_id)
+        assert body["revision_id"] == str(agg.published_revision().revision_id)
+        assert body["answers"][0]["answer_value"] == "A"
+        assert body["explanation_blocks"][0]["text"] == "解析内容"
+        assert body["content"]["bodies"][0]["stem_blocks"][0]["text"] == "题干内容"
+
+    def test_unpublished_is_404_even_with_token(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        monkeypatch.setenv("QCORE_INTERNAL_TOKEN", "t" * 32)
+        agg = _aggregate("review_only", published=False)
+        client = TestClient(create_student_app(lambda: [agg]))
+        r = client.get(
+            f"/internal/published/{agg.identity.question_id}",
+            headers={"X-QCore-Internal-Token": "t" * 32},
+        )
+        assert r.status_code == 404
