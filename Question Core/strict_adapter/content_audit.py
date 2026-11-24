@@ -88,22 +88,28 @@ def _dup_key(s: str) -> str:
 #: （2022 甲卷 15/16/17 曾如此）。只对这些题型做阻塞判定，避免误伤其它题型。
 SECTION_INSTRUCTION_KEYWORDS: dict[str, tuple[str, ...]] = {
     "seven_to_five": (
-        "从短文后的选项中选出",
         "从短文后的选项中",
+        "短文后的选项",
+        "选项中有两项为多余",
         "choose the best option",
         "choose the correct option",
     ),
     "cloze": (
         "从短文后各题所给的",
         "从每题所给的",
-        "选出可以填入空白处",
+        "掌握其大意",
+        "选出最佳选项",
         "choose the best option for each blank",
+        "choose the best option",
     ),
     "grammar_fill": (
         "在空白处填入",
+        "在未给提示词的空白处",
+        "根据短文内容填空",
+        "填写1个适当的单词",
         "填入1个适当的单词",
         "fill in the blank",
-        "correct form of the word",
+        "correct form",
     ),
 }
 
@@ -343,9 +349,12 @@ def audit_unit(rec: dict[str, Any]) -> dict:
     # H. 节指令在场（QCORE-QIQI-SECTION-INSTRUCTION-01）：
     #    七选五/完形/语法填空的卷面指令必须落在题面（题干或材料）里；漏在单元
     #    区间外时学生端就是「没有题干」。只对这三类题型判定，避免误伤其他题型。
+    #    这是**软门**：不阻断准入（可确定性映射的题仍入库），但强制
+    #    completeness=incomplete（not_ready，不得发布），等 Manifest 声明补齐后重导。
+    soft_problems: list[str] = []
     instr_present = _section_instruction_present(rec, stem_blocks + material_blocks)
     if instr_present is False:
-        problems.append(
+        soft_problems.append(
             "H: section instruction missing for type "
             f"{(rec.get('question_type') or '').strip()!r} "
             "(section_instruction_outside_unit)"
@@ -353,8 +362,10 @@ def audit_unit(rec: dict[str, Any]) -> dict:
 
     # E. 状态汇总
     status = "ok" if not problems else "FAIL"
+    details["soft_problems"] = soft_problems
     details["shape"] = shape
-    return {"status": status, "problems": problems, "details": details}
+    return {"status": status, "problems": problems, "soft_problems": soft_problems,
+            "details": details}
 
 
 # ---------------------------------------------------------------------------

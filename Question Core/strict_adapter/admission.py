@@ -60,6 +60,35 @@ def admit(
     audit_result = enforce_content_audit(mapping, ctx)
     log["content_audit"] = audit_result
 
+    # ---- 0b. 软门：节指令不在题面（QCORE-QIQI-SECTION-INSTRUCTION-01）----
+    # 可确定性映射的题仍准入（不丢内容），但强制 incomplete / not_ready——学生端
+    # 拿不到「没有题干」的题；Manifest 声明补齐后重导即可恢复 complete。
+    soft = list(audit_result.get("soft_problems") or [])
+    if soft:
+        from dataclasses import replace as _replace
+
+        from question_core.contracts.v1 import Completeness as _C
+
+        core = mapping.candidate.core
+        data = core.model_dump()
+        data["completeness"] = _C.INCOMPLETE
+        new_core = type(core).model_validate(data)
+        source = mapping.candidate.source
+        src_data = source.model_dump()
+        if isinstance(src_data.get("answer_declaration"), dict):
+            src_data["answer_declaration"]["completeness"] = _C.INCOMPLETE
+        new_source = type(source).model_validate(src_data)
+        cand = type(mapping.candidate)(core=new_core, source=new_source)
+        mapping = _replace(
+            mapping, candidate=cand, completeness="incomplete",
+            state_plan="hold_not_ready",
+        )
+        log["soft_gate"] = {
+            "problems": soft,
+            "forced_completeness": "incomplete",
+            "publishable": False,
+        }
+
     # ---- 1. 契约校验（真实 validator，不是模拟）----
     try:
         candidate_adapter.validate_python(
