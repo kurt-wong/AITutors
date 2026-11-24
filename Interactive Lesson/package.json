@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "validate:math": "node tools/validate-katex.cjs \"../Teaching Script Compiler/data\""
   },
   "dependencies": {
     "katex": "^0.16.22",

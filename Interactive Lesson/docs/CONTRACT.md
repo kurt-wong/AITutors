@@ -82,7 +82,7 @@ Board block 类型：`heading | text | math | image | table | callout | choice |
 {"source":"interactive-lesson","type":"completed","payload":{"question_id":"...","revision_id":"..."}}
 {"source":"interactive-lesson","type":"followup_request","payload":{
   "question_id":"...","revision_id":"...","step_id":"s2","step_goal":"...",
-  "speech":"...","source_refs":["exp:1"]}}
+  "speech":"...","source_refs":["exp:1"],"question":"学生在播放器里输入的问题"}}
 ```
 
 父窗口 → 子窗口：
