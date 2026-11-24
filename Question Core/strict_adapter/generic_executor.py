@@ -173,6 +173,102 @@ def load_paper_descriptors(path: Path) -> list[PaperInput]:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# OCR↔PDF 截断门（QCORE-OCR-TRUNCATION-GATE-01）
+#
+# 背景：adapter 只拿到 OCR 文本，看不到像素；2022 甲卷 15 选项 B 曾被 OCR 截断
+# 为「…any given co」（PDF 印的是「…any given country」），一路进了学生端。
+# 这里在**新导入**时对题区做一次确定性比对：OCR 行若恰好是某条 PDF 文本行的
+# 严格前缀（且长度差 > 阈值），即判定为截断，fail-closed 挡住该卷。
+# 只查截断，不查重复（重复的假阳性高，交给人/规则 G）；不回溯已发布数据。
+# ---------------------------------------------------------------------------
+
+#: 题区在 MD 里到此为止（答案/解析区不做学生可见性要求）。
+_ANSWER_AREA_MARK = re.compile(r"参考答案|【答案】|【解析】|答案与解析")
+_OCR_MEDIA_LINE = re.compile(r"^\s*(?:<(?:div|table|img|p)\b|!\[)")
+_OCR_TRUNC_MIN_LEN = 20
+_OCR_TRUNC_MIN_GAP = 3
+
+
+def _ocr_norm_line(s: str) -> str:
+    import unicodedata
+
+    s = unicodedata.normalize("NFKC", s or "")
+    s = s.translate(str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"'}))
+    s = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", s)
+    s = re.sub(r"<[^>]+>", " ", s)
+    return re.sub(r"\s+", "", s).lower()
+
+
+def ocr_question_area(md_lines: list[str]) -> list[tuple[int, str]]:
+    """题区行（1-based，遇到第一个答案/解析标记即停）。"""
+    out: list[tuple[int, str]] = []
+    for i, ln in enumerate(md_lines, 1):
+        if _ANSWER_AREA_MARK.search(ln):
+            break
+        out.append((i, ln))
+    return out
+
+
+def find_truncated_lines(
+    md_lines: list[str],
+    pdf_lines: list[str],
+    *,
+    min_len: int = _OCR_TRUNC_MIN_LEN,
+    min_gap: int = _OCR_TRUNC_MIN_GAP,
+) -> list[dict]:
+    """OCR 行是某条 PDF 文本行的严格前缀（且少 > min_gap 字符）= 截断。
+
+    纯函数，便于单测；不做 I/O。
+    """
+    pdf_norm = [p for p in (_ocr_norm_line(x) for x in pdf_lines) if p]
+    pdf_set = set(pdf_norm)
+    hits: list[dict] = []
+    for line_no, raw in ocr_question_area(md_lines):
+        if _OCR_MEDIA_LINE.match(raw):
+            continue
+        n = _ocr_norm_line(raw)
+        if len(n) < min_len or n in pdf_set:
+            continue
+        longer = next(
+            (p for p in pdf_norm if len(p) > len(n) + min_gap and p.startswith(n)),
+            None,
+        )
+        if longer:
+            hits.append({"line": line_no, "md": raw.strip()[:160],
+                         "pdf": longer[:160], "missing_chars": len(longer) - len(n)})
+    return hits
+
+
+def extract_pdf_text_lines(pdf_path: Path) -> list[str]:
+    """PDF 文本层按行切分；pymupdf 不可用时抛 OcrSourceCheckUnavailable。"""
+    try:
+        import pymupdf  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        raise OcrSourceCheckUnavailable(f"pymupdf unavailable: {type(exc).__name__}: {exc}")
+    lines: list[str] = []
+    doc = pymupdf.open(str(pdf_path))
+    try:
+        for page in doc:
+            lines.extend(page.get_text("text").split("\n"))
+    finally:
+        doc.close()
+    return lines
+
+
+def check_ocr_truncation(md_lines: list[str], pdf_path: Path) -> dict:
+    """返回 {checked, hits}；PDF 无文本层（扫描件）时 checked=False 并记录原因。"""
+    pdf_lines = extract_pdf_text_lines(pdf_path)
+    if not any(x.strip() for x in pdf_lines):
+        return {"checked": False, "reason": "pdf text layer empty (scanned?)", "hits": []}
+    hits = find_truncated_lines(md_lines, pdf_lines)
+    return {"checked": True, "hits": hits}
+
+
+class OcrSourceCheckUnavailable(RuntimeError):
+    """截断门无法执行（缺依赖/读不了 PDF）。调用方决定 fail-closed 还是记录。"""
+
+
 def build_context(p: PaperInput, run_id: str) -> tuple[MappingContext, dict]:
     """构造单卷 MappingContext；哈希/字节现算。annotated 缺省时沿既有驱动惯例回退。
 
@@ -431,6 +527,7 @@ def run_papers(
     forbidden_prefixes: tuple[str, ...] = FORBIDDEN_DB_PREFIXES,
     exclusions: list[dict] | None = None,
     suspensions: list[dict] | None = None,
+    ocr_source_check: bool = True,
 ) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -474,6 +571,21 @@ def run_papers(
             prec["traceback"] = traceback.format_exc()
             summary["papers"].append(prec)
             continue
+        # --- OCR↔PDF 截断门（新导入专用；已发布数据不回溯）---
+        if ocr_source_check:
+            try:
+                chk = check_ocr_truncation(list(ctx.lines), p.source_pdf_path)
+            except OcrSourceCheckUnavailable as exc:
+                chk = {"checked": False, "reason": str(exc), "hits": []}
+            prec["ocr_source_check"] = chk
+            if chk.get("hits"):
+                prec["status"] = "ocr_source_defect"
+                prec["error"] = (
+                    "ocr truncation vs PDF text layer (OCR_SOURCE_ERROR): "
+                    + json.dumps(chk["hits"], ensure_ascii=False)
+                )
+                summary["papers"].append(prec)
+                continue
         pairs = []
         for idx, unit in enumerate(ctx.manifest["units"], start=1):
             urec = {
@@ -631,6 +743,7 @@ def run_papers(
         "persist_skipped_duplicate": sum(1 for u in flat if u.get("persist") == "skipped_duplicate"),
         "persist_rolled_back": sum(1 for u in flat if u.get("persist") == "rolled_back"),
         "paper_input_failed": sum(1 for pr in summary["papers"] if pr.get("status") == "paper_input_failed"),
+        "ocr_source_defect": sum(1 for pr in summary["papers"] if pr.get("status") == "ocr_source_defect"),
     }
     summary["finished_at"] = now()
     (out_dir / "run_summary.json").write_text(
@@ -771,6 +884,12 @@ def main(argv: list[str] | None = None) -> int:
         help="JSON array of units temporarily withheld from students (content kept, "
         "completeness forced incomplete); each item needs reason_code",
     )
+    ap.add_argument(
+        "--no-ocr-source-check",
+        action="store_true",
+        help="skip the OCR-vs-PDF truncation gate (not recommended; the gate only "
+        "applies to newly imported papers)",
+    )
     args = ap.parse_args(argv)
 
     run_id = args.run_id or f"generic-exec-{now().replace(':', '').replace('-', '')[:15]}"
@@ -790,6 +909,7 @@ def main(argv: list[str] | None = None) -> int:
         forbidden=forbidden,
         exclusions=load_exclusions(args.exclusions),
         suspensions=load_suspensions(args.suspend),
+        ocr_source_check=not args.no_ocr_source_check,
     )
     print(
         json.dumps(

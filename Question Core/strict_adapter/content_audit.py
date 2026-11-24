@@ -81,6 +81,43 @@ def _dup_key(s: str) -> str:
     return re.sub(r"\s+", "", s).lower()
 
 
+#: 带「节指令」的题型 → 题面必须出现的指令关键词（规则 H）。
+#: 关键词取自生产语料实证（11 卷扫描，见 instruction_scan.json）：这类题的
+#: 卷面指令（"从短文后的选项中选出…"/"在空白处填入…"）是学生可见题面的组成部分；
+#: 一旦 Manifest 把它漏在单元区间外，学生端就出现「没有题干」的题
+#: （2022 甲卷 15/16/17 曾如此）。只对这些题型做阻塞判定，避免误伤其它题型。
+SECTION_INSTRUCTION_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "seven_to_five": (
+        "从短文后的选项中选出",
+        "从短文后的选项中",
+        "choose the best option",
+        "choose the correct option",
+    ),
+    "cloze": (
+        "从短文后各题所给的",
+        "从每题所给的",
+        "选出可以填入空白处",
+        "choose the best option for each blank",
+    ),
+    "grammar_fill": (
+        "在空白处填入",
+        "填入1个适当的单词",
+        "fill in the blank",
+        "correct form of the word",
+    ),
+}
+
+
+def _section_instruction_present(rec: dict[str, Any], blocks: list[dict]) -> bool | None:
+    """题型有节指令要求时，返回题面是否包含指令；无要求返回 None。"""
+    qtype = (rec.get("question_type") or "").strip()
+    keys = SECTION_INSTRUCTION_KEYWORDS.get(qtype)
+    if not keys:
+        return None
+    blob = _dup_key("".join((b.get("text") or "") for b in blocks))
+    return any(_dup_key(k) in blob for k in keys)
+
+
 def _strip_tags(s: str) -> str:
     """剥标签用于溯源比对；`<sub>/<sup>` 先转 `_x`/`^x`，与抽取层保持一致。"""
     s = re.sub(
@@ -303,6 +340,17 @@ def audit_unit(rec: dict[str, Any]) -> dict:
                 f"{len(repeats)}× (OCR duplication): {repeats[0][:60]!r}"
             )
 
+    # H. 节指令在场（QCORE-QIQI-SECTION-INSTRUCTION-01）：
+    #    七选五/完形/语法填空的卷面指令必须落在题面（题干或材料）里；漏在单元
+    #    区间外时学生端就是「没有题干」。只对这三类题型判定，避免误伤其他题型。
+    instr_present = _section_instruction_present(rec, stem_blocks + material_blocks)
+    if instr_present is False:
+        problems.append(
+            "H: section instruction missing for type "
+            f"{(rec.get('question_type') or '').strip()!r} "
+            "(section_instruction_outside_unit)"
+        )
+
     # E. 状态汇总
     status = "ok" if not problems else "FAIL"
     details["shape"] = shape
@@ -357,6 +405,8 @@ def build_audit_record(unit: dict, mapping, ctx) -> dict[str, Any]:
         "source_line_count": len(ctx.lines),
         # 单元声明范围（规则 F 的判定域）。
         "unit_lines": _ranges,
+        # 题型（规则 H 的分派键）：Manifest 的 original_question_type。
+        "question_type": (unit or {}).get("original_question_type") or "",
         "manifest_option_lines": man_opt_lines,
         "options": [
             {"label": o.label, "blocks": blocks_of(o.blocks),
