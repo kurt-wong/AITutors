@@ -59,6 +59,27 @@ def _norm(s: str) -> str:
 #: way it already skips blank lines.
 _MD_THEMATIC_BREAK = re.compile(r"^(?:-{3,}|\*{3,}|_{3,})$")
 
+#: 选项块文本的印刷标号前缀（`A.` `A、` `A：` `A)`），用于"同一选项内是否重复
+#: 同一句"的判定；只剥行首标号，不改动正文。
+_OPT_LABEL_PREFIX = re.compile(r"^\s*[A-H]\s*[.．、:：)）]\s*")
+
+#: 源 MD 里的媒体行（图片/表格以 HTML 或 Markdown 图片形式出现）：由 image/table
+#: 块承载，但块本身可能不带行号，规则 F 不把它们当"文本缺行"。
+_MEDIA_LINE = re.compile(r"^\s*(?:<(?:div|table|img|p)\b|!\[)")
+
+#: 页眉页脚（`7 / 20`）：版式家具，不是题目内容。
+_FURNITURE_LINE = re.compile(r"^\s*\d+\s*/\s*\d+\s*$")
+
+#: 选项重复判定键：全半角归一、引号归一、去所有空白并小写。
+_QUOTE_MAP = str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"'})
+
+
+def _dup_key(s: str) -> str:
+    import unicodedata
+
+    s = unicodedata.normalize("NFKC", s or "").translate(_QUOTE_MAP)
+    return re.sub(r"\s+", "", s).lower()
+
 
 def _strip_tags(s: str) -> str:
     """剥标签用于溯源比对；`<sub>/<sup>` 先转 `_x`/`^x`，与抽取层保持一致。"""
@@ -226,6 +247,62 @@ def audit_unit(rec: dict[str, Any]) -> dict:
                 f"B: manifest option lines not covered by stem/material "
                 f"blocks (stem_text shape): {missing}")
 
+    # F. 单元内源行覆盖（QCORE-QIQI-MATERIAL-LOSS-01 的通用门禁）：
+    #    单元声明的范围内，任何非空、非分隔线的源行都必须被某个内容块承载
+    #    （文本/图片/表格/选项块）。缺行 = 正文静默丢失（七选五材料被误裁、
+    #    小问被清空、答案区错位等都会落在这里），fail-closed。
+    unit_ranges = [tuple(r) for r in (rec.get("unit_lines") or [])]
+    if unit_ranges and source_lines:
+        covered: set[int] = set()
+        for b in stem_blocks + material_blocks:
+            ls, le = b.get("line_start"), b.get("line_end")
+            if isinstance(ls, int) and isinstance(le, int):
+                covered.update(range(ls, le + 1))
+        for o in options:
+            for b in o.get("blocks") or []:
+                ls, le = b.get("line_start"), b.get("line_end")
+                if isinstance(ls, int) and isinstance(le, int):
+                    covered.update(range(ls, le + 1))
+        missing_lines: list[int] = []
+        for a, b in unit_ranges:
+            for ln in range(int(a), int(b) + 1):
+                if ln < 1 or ln > n_src:
+                    continue
+                raw = source_lines[ln - 1]
+                if not raw.strip() or _MD_THEMATIC_BREAK.match(raw.strip()):
+                    continue
+                if _MEDIA_LINE.match(raw) or _FURNITURE_LINE.match(raw):
+                    continue
+                if ln not in covered:
+                    missing_lines.append(ln)
+        if missing_lines:
+            problems.append(
+                "F: declared unit lines not covered by any content block "
+                f"(text loss): {missing_lines[:20]}"
+                + (" …" if len(missing_lines) > 20 else "")
+            )
+            details["unit_line_gaps"] = missing_lines
+
+    # G. 选项自重复（OCR 把同一行抽取两次的典型形态）：
+    #    同一选项内多个文本块去掉标号后文本相同 = 抽取重复，不是源文重复。
+    #    2023 I 卷七选五选项 G 的重复行即此形态（PDF 只印一次）。
+    for o in options:
+        normalized: dict[str, int] = {}
+        for b in o.get("blocks") or []:
+            txt = (b.get("text") or "").strip()
+            if not txt:
+                continue
+            key = _dup_key(_OPT_LABEL_PREFIX.sub("", txt))
+            if not key:
+                continue
+            normalized[key] = normalized.get(key, 0) + 1
+        repeats = [k for k, v in normalized.items() if v > 1]
+        if repeats:
+            problems.append(
+                f"G: option {o.get('label')!r} repeats the same text "
+                f"{len(repeats)}× (OCR duplication): {repeats[0][:60]!r}"
+            )
+
     # E. 状态汇总
     status = "ok" if not problems else "FAIL"
     details["shape"] = shape
@@ -257,10 +334,29 @@ def build_audit_record(unit: dict, mapping, ctx) -> dict[str, Any]:
                      if b.parent_question_ref is None]
     man_opt_lines = [(o["start_line"], o["end_line"])
                      for o in ((unit or {}).get("options") or [])]
+    # 单元声明范围（规则 F 的判定域）：优先 questions_lines；standalone 单元
+    # 没有 questions_lines，则用 stem_lines ∪ material_lines。
+    _unit = unit or {}
+    _ranges: list[tuple[int, int]] = []
+
+    def _collect(field: str) -> None:
+        r = _unit.get(field)
+        if isinstance(r, (list, tuple)) and len(r) == 2 and all(
+            isinstance(x, int) and not isinstance(x, bool) for x in r
+        ):
+            _ranges.append((int(r[0]), int(r[1])))
+
+    if _unit.get("questions_lines"):
+        _collect("questions_lines")
+    else:
+        _collect("stem_lines")
+        _collect("material_lines")
     return {
         "unit_id": mapping.unit_id,
         "source_lines": list(ctx.lines),
         "source_line_count": len(ctx.lines),
+        # 单元声明范围（规则 F 的判定域）。
+        "unit_lines": _ranges,
         "manifest_option_lines": man_opt_lines,
         "options": [
             {"label": o.label, "blocks": blocks_of(o.blocks),
