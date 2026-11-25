@@ -258,7 +258,31 @@
           }
         },
         "decision": "V1.1 primary candidate; do not silently replace frozen V1 BGE",
-        "evidence": "docs/quality/SEMANTIC_EMBEDDING_SELECTION_20261125.md"
+        "evidence": "docs/quality/SEMANTIC_EMBEDDING_SELECTION_20261125.md",
+        "validation_20261125": {
+          "status": "INSUFFICIENT_EVIDENCE",
+          "holdout_r2": {
+            "n": 45,
+            "bge_exact": 20,
+            "gemma_exact": 23,
+            "false_exact_both": 0,
+            "manifest_sha256": "42c2fcef00f6eed8184a1540752159b8eb43409102b58452ccd04692891819e5"
+          },
+          "independent_negatives": {
+            "n": 18,
+            "bge_unknown": 18,
+            "gemma_unknown": 18,
+            "false_exact": 0
+          },
+          "legacy_real_camera": {
+            "positives": 2,
+            "negatives": 37,
+            "independent": false
+          },
+          "limitation": "no 45 real-camera photos; no independent Similar labels; holdout is rendered_photo_style",
+          "production_switch_authorized": false,
+          "report": "docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-ISOLATED-VALIDATION-01.md"
+        }
       }
     }
   },

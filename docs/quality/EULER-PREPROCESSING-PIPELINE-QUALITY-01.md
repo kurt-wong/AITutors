@@ -120,7 +120,8 @@
 - **V1.1 主候选：embeddinggemma-2:latest**（262k context、768 dim、1.3GB、1166 题建索引约 23s）；
 - **轻量备选：qwen3-embedding:0.6b**（639MB、32k、23/38 Exact）；
 - 详细数据：`docs/quality/SEMANTIC_EMBEDDING_SELECTION_20261125.md`；
-- 当前动作：**V1 继续冻结 BGE；V1.1 候选不进入当前生产**，不静默替换。
+- 当前动作：**V1 继续冻结 BGE；V1.1 候选不进入当前生产**，不静默替换；
+- **孤立验证（2026-11-25）**：独立渲染 Holdout 45 条上 gemma-2 23/45、BGE 20/45，双方 0 False Exact；18 条独立负向双方 18/18 Unknown；但无 45 张真机照片与独立 Similar 金标，结论 **INSUFFICIENT EVIDENCE**，不授权生产切换。报告：`docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-ISOLATED-VALIDATION-01.md`。
 
 ---
 
