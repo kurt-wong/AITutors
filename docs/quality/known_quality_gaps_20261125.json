@@ -452,6 +452,25 @@
           "embedding_required": false,
           "next_task": "EULER-QUESTION-SEGMENT-RECOVERY-01",
           "report": "docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-CLOSURE.md"
+        },
+        "question_segment_recovery_20261126": {
+          "status": "DSH_PARTIAL",
+          "completed": [
+            "root_cause_4",
+            "ocr_raw_retention",
+            "ocr_v2_24",
+            "structure_guard",
+            "compiler_structure_api",
+            "deeptutor_target_selection",
+            "20_ocr_block_audit"
+          ],
+          "not_completed": [
+            "shared_material_query",
+            "20_human_structure_gold",
+            "browser_e2e",
+            "table_snapshot_report"
+          ],
+          "report": "docs/quality/EULER-QUESTION-SEGMENT-RECOVERY-01.md"
         }
       }
     }
