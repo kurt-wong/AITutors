@@ -322,6 +322,45 @@
           "auto_exact_count": 0,
           "production_switch_authorized": false,
           "report": "docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-MULTI-CANDIDATE-01.md"
+        },
+        "bge_m3_evaluation_20261125": {
+          "status": "INCONCLUSIVE_NO_REPLACEMENT",
+          "deployment": "llama.cpp dense-only; sparse/multi-vector not exposed",
+          "rendered_45": {
+            "bge_m3_dense": {
+              "@1": 0.9333,
+              "@10": 1.0
+            },
+            "bm25": {
+              "@1": 0.9111,
+              "@10": 1.0
+            },
+            "hybrid_alpha07": {
+              "@1": 0.9556,
+              "@10": 1.0
+            }
+          },
+          "real_45": {
+            "bge_m3_dense": {
+              "@1": 0.6444,
+              "@10": 0.9333
+            },
+            "bm25": {
+              "@1": 0.6444,
+              "@10": 0.9778
+            },
+            "hybrid_alpha07": {
+              "@1": 0.6889,
+              "@10": 1.0
+            }
+          },
+          "reranker": {
+            "status": "not_usable_current_deployment",
+            "rendered_at1": 0.6667,
+            "real_at1": 0.0667
+          },
+          "production_switch_authorized": false,
+          "report": "docs/quality/EULER-SEMANTIC-RETRIEVAL-BGE-M3-EVALUATION-01.md"
         }
       }
     }
