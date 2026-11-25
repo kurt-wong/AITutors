@@ -364,6 +364,21 @@
           "full_capability_task_authorized": false,
           "product_decision": "BGE-M3 evaluation stage-closed; BGE V1 frozen; BM25 candidate channel; no HF/FlagEmbedding/ColBERT/reranker",
           "decision_report": "docs/quality/SEMANTIC-RETRIEVAL-PRODUCT-DECISION-20261125.md"
+        },
+        "architecture_minimal_stage1_20261125": {
+          "status": "PASS_CANDIDATE_RECALL",
+          "method": "BM25 + question segmentation, no LLM, no embedding",
+          "rendered_45": {
+            "photo_any_segment@5": 1.0,
+            "target_segment@5": 1.0
+          },
+          "real_45": {
+            "photo_any_segment@5": 1.0,
+            "target_segment@5": 1.0
+          },
+          "avg_real_segments": 3.13,
+          "note": "candidate recall only; final Exact/Similar/Unknown requires stage 2 LLM judge",
+          "report": "docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-STAGE1.md"
         }
       }
     }
