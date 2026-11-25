@@ -113,12 +113,14 @@
 - 已知限制：长题干语义稀释；
 - 当前动作：**保持 V1 冻结基线**，不静默替换。
 
-### F. qwen3-embedding:4b（已验证候选，不进入当前生产）
+### F. Embedding 选型（2026-11-25）
 
-- Ollama 本地模型：4B，2560 dim，context 40960，Q4_K_M；
-- 9 科 Exact：10/18 = 0.556；Unknown 37/37；但 E017 出现 1 个 `false_similar`（top1 错题）；
-- 建索引约 166 秒（1166 题）；
-- 结论：**V1.1 候选**，需重新校准阈值/长文本分块/池化后再比较；**不得静默替换 BGE**。
+- 对比：`nomic-embed-text`、`qwen3-embedding:0.6b`、`qwen3-embedding:4b`、`embeddinggemma-2:latest`，以及 V1 冻结的 BGE-small；
+- 安全工作点（0 false exact、Unknown 37/37、0 hard false-similar）：**embeddinggemma-2 24/38 Exact、4/7 Similar、12/12 Hard-negative**；qwen0.6b 23/38、1/7；qwen4b 23/38、2/7；nomic 21/38、2/7；BGE 22/38、6/7（伴 1 个 false similar）；
+- **V1.1 主候选：embeddinggemma-2:latest**（262k context、768 dim、1.3GB、1166 题建索引约 23s）；
+- **轻量备选：qwen3-embedding:0.6b**（639MB、32k、23/38 Exact）；
+- 详细数据：`docs/quality/SEMANTIC_EMBEDDING_SELECTION_20261125.md`；
+- 当前动作：**V1 继续冻结 BGE；V1.1 候选不进入当前生产**，不静默替换。
 
 ---
 
@@ -131,7 +133,7 @@
 | OCR 真截断 × 2 | 真源缺失 | 锁定为阻断案例 | OCR 质量 |
 | OCR 格式误报 × 6 | 截断门归一化不足 | 锁定，不现场修 | Strict Adapter 归一化 |
 | Essay × 33 | Compiler 题型覆盖缺口 | 不改 QCore | Essay Teaching Contract |
-| BGE 512 | V1 模型能力限制 | 保持 V1 冻结 | Semantic V1.1 |
+| Embedding 选型 | V1 冻结 + V1.1 候选 | BGE 保持 V1；gemma 主候选 | Semantic V1.1 |
 
 ### 锁定原则
 
@@ -142,7 +144,7 @@
 5. 33 份 essay `NO_ANSWER` 不作为 Question 数据异常。
 6. Essay 通过独立 Teaching Contract 解决。
 7. BGE-small 继续作为 V1 冻结基线。
-8. qwen3-embedding:4b 仅作为 V1.1 候选，不进入当前生产。
+8. embeddinggemma-2 仅作为 V1.1 主候选，qwen3-embedding:0.6b 为轻量备选；BGE-small 继续作为 V1 冻结基线，不静默替换。
 9. 所有样本、错误类型、触发条件、当前结论进入长期回归资产。
 10. 当前主线不因这些问题重开已通过的 Euler PREPROD / Semantic V1 工作。
 

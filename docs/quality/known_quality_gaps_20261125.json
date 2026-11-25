@@ -28,12 +28,42 @@
       "is_code_bug": false,
       "current_action": "freeze; do not relax gate",
       "samples": [
-        {"sample_id": "T046", "paper_id": "2024北京八十中高二（上）期中化学（教师版）(1)", "subject": "化学", "unit": "U18"},
-        {"sample_id": "T047", "paper_id": "2024北京清华附中朝阳学校高三10月月考化学（教师版）(1)", "subject": "化学", "unit": "U4"},
-        {"sample_id": "T060", "paper_id": "2022北京北师大附中高三（上）期中生物（教师版）(1)", "subject": "生物", "unit": "U19"},
-        {"sample_id": "T066", "paper_id": "2024北京理工大附中高一6月月考地理（教师版）", "subject": "地理", "unit": "U18"},
-        {"sample_id": "T071", "paper_id": "2023北京昌平高一（上）期末政治（教师版）", "subject": "政治", "unit": "U25"},
-        {"sample_id": "T072", "paper_id": "2024北京西城高一（上）期末政治（教师版）(1)", "subject": "政治", "unit": "U26"}
+        {
+          "sample_id": "T046",
+          "paper_id": "2024北京八十中高二（上）期中化学（教师版）(1)",
+          "subject": "化学",
+          "unit": "U18"
+        },
+        {
+          "sample_id": "T047",
+          "paper_id": "2024北京清华附中朝阳学校高三10月月考化学（教师版）(1)",
+          "subject": "化学",
+          "unit": "U4"
+        },
+        {
+          "sample_id": "T060",
+          "paper_id": "2022北京北师大附中高三（上）期中生物（教师版）(1)",
+          "subject": "生物",
+          "unit": "U19"
+        },
+        {
+          "sample_id": "T066",
+          "paper_id": "2024北京理工大附中高一6月月考地理（教师版）",
+          "subject": "地理",
+          "unit": "U18"
+        },
+        {
+          "sample_id": "T071",
+          "paper_id": "2023北京昌平高一（上）期末政治（教师版）",
+          "subject": "政治",
+          "unit": "U25"
+        },
+        {
+          "sample_id": "T072",
+          "paper_id": "2024北京西城高一（上）期末政治（教师版）(1)",
+          "subject": "政治",
+          "unit": "U26"
+        }
       ]
     },
     "g9_struct_integrity": {
@@ -167,16 +197,69 @@
       "current_model": "BAAI/bge-small-zh-v1.5",
       "max_position_embeddings": 512,
       "embedding_dim": 512,
-      "nine_subject_exact": {"correct": 9, "total": 18, "recall": 0.5, "false_exact": 0},
-      "candidate_model": "qwen3-embedding:4b (Ollama)",
-      "candidate_context": 40960,
-      "candidate_dim": 2560,
-      "candidate_quantization": "Q4_K_M",
-      "candidate_nine_subject_exact": {"correct": 10, "total": 18, "recall": 0.556, "false_exact": 0, "false_similar": 1},
-      "candidate_unknown": {"correct": 37, "total": 37},
-      "candidate_index_seconds": 166,
-      "current_action": "keep BGE-small as frozen V1 baseline; qwen3 only candidate for V1.1",
-      "long_term": "SEMANTIC-RETRIEVAL-V1.1-EMBEDDING-EVALUATION"
+      "nine_subject_exact": {
+        "correct": 9,
+        "total": 18,
+        "recall": 0.5,
+        "false_exact": 0
+      },
+      "current_action": "BGE-small remains frozen V1; embeddinggemma-2 is V1.1 primary candidate; qwen3-embedding:0.6b is lightweight fallback; no silent replacement",
+      "long_term": "SEMANTIC-RETRIEVAL-V1.1-EMBEDDING-EVALUATION",
+      "selection_20261125": {
+        "selected_primary": "embeddinggemma-2:latest",
+        "selected_fallback": "qwen3-embedding:0.6b",
+        "frozen_baseline": "BAAI/bge-small-zh-v1.5",
+        "safe_config": {
+          "exact_dense": 0.74,
+          "similar_dense": 0.85,
+          "similar_lexical": 0.55
+        },
+        "results": {
+          "bge_small": {
+            "exact": 22,
+            "exact_total": 38,
+            "false_exact": 0,
+            "unknown": 37,
+            "similar": 6,
+            "hard_unknown": 12,
+            "hard_false_similar": 1
+          },
+          "nomic": {
+            "exact": 21,
+            "false_exact": 0,
+            "unknown": 37,
+            "similar": 2,
+            "hard_unknown": 12,
+            "hard_false_similar": 0
+          },
+          "qwen3_0.6b": {
+            "exact": 23,
+            "false_exact": 0,
+            "unknown": 37,
+            "similar": 1,
+            "hard_unknown": 12,
+            "hard_false_similar": 0
+          },
+          "qwen3_4b": {
+            "exact": 23,
+            "false_exact": 0,
+            "unknown": 37,
+            "similar": 2,
+            "hard_unknown": 12,
+            "hard_false_similar": 0
+          },
+          "gemma_2": {
+            "exact": 24,
+            "false_exact": 0,
+            "unknown": 37,
+            "similar": 4,
+            "hard_unknown": 12,
+            "hard_false_similar": 0
+          }
+        },
+        "decision": "V1.1 primary candidate; do not silently replace frozen V1 BGE",
+        "evidence": "docs/quality/SEMANTIC_EMBEDDING_SELECTION_20261125.md"
+      }
     }
   },
   "lock_policies": [
@@ -189,6 +272,7 @@
     "BGE-small remains the frozen V1 baseline",
     "qwen3-embedding:4b is V1.1 candidate only; no silent replacement",
     "all samples/errors/triggers/conclusions are long-term regression assets",
-    "do not reopen closed Euler PREPROD / Semantic V1 work for these gaps"
+    "do not reopen closed Euler PREPROD / Semantic V1 work for these gaps",
+    "embeddinggemma-2 is the V1.1 primary candidate; qwen3-embedding:0.6b is the lightweight fallback; BGE-small remains frozen V1"
   ]
 }
