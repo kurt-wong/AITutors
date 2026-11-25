@@ -6,7 +6,8 @@
 - 裁决方：Owner
 - 日期：2026-11-25
 - 基线：AITutors `b0010dbed`
-- 当前 HEAD：`8df070a43`（已推送 `origin/main`）
+- 任务执行 HEAD：`8df070a43`（已推送 `origin/main`）
+- 本报告提交：以仓库当前提交为准
 - 当前生产默认：**BGE-small-zh-v1.5 / Semantic Retrieval V1，未切换**
 - V1.1 候选：`embeddinggemma-2:latest`，冻结配置 `.74/.85/.55`
 
