@@ -110,6 +110,14 @@ Similar 永不计为 Exact；返回最多 3 条，并标注 `relation=similar`�
 | Exact Precision | **1.00**（0 个 false exact） |
 | 错误类型 | 1 条 top1 错误、2 条低 dense 未判、1 条 OCR 截断、1 条选项/词法不足、2 条相似题未达 exact |
 
+9 科扩展语料（1166 题，2026-11-25 Track A）上另做 18 条真实 crop OCR（每科 2 条）：
+
+| 指标 | 值 |
+| --- | ---: |
+| Exact Recall | **0.50**（9/18） |
+| Exact Precision | **1.00**（0 个 false exact） |
+| Miss 原因 | 长文本 512-token 稀释（地理/政治/物理/生物）、数字覆盖不足（英语/语文）、top2 近并列 |
+
 未命中的 7 条均已人工核对：没有把错误题自动放行。
 
 ### 5.2 Unknown（37 条真实负向）
@@ -119,6 +127,8 @@ Similar 永不计为 Exact；返回最多 3 条，并标注 `relation=similar`�
 | Unknown 判定率 | **1.00**（37/37） |
 | False Exact | **0** |
 | False Similar | **0** |
+
+同一 37 条负向在 9 科 1166 题索引上同样 **37/37 unknown、0 false exact/similar**。
 
 ### 5.3 Similar / Hard Negative（19 组人工配对）
 
