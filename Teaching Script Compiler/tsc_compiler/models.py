@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 SCRIPT_SCHEMA_VERSION = "1.0.0"
-PROMPT_VERSION = "deterministic-explanation-v4"
+PROMPT_VERSION = "deterministic-explanation-v5"
 MODEL_ID = "deterministic"
 RENDERER_VERSION = "interactive-lesson/1.0.0"
 DEFAULT_LANGUAGE = "zh-CN"

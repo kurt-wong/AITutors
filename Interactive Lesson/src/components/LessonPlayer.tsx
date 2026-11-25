@@ -16,6 +16,7 @@ import {
 } from '../player/timeline';
 import { BoardView } from './BoardView';
 import { FollowUpBox } from './FollowUpBox';
+import { MathText } from './MathText';
 
 interface LessonPlayerProps {
   bundle: TeachingBundle;
@@ -234,7 +235,7 @@ export function LessonPlayer({ bundle, reducedMotion }: LessonPlayerProps) {
         <div className="step-caption">
           <p className="step-goal">{currentStep.goal}</p>
           <p className="step-subtitle" data-testid="step-subtitle">
-            {currentStep.subtitle}
+            <MathText text={currentStep.subtitle} />
           </p>
         </div>
       </div>

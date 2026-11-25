@@ -389,6 +389,9 @@ def _step(
     speech = speechify(speech_source)
     if not speech:
         speech = goal
+    # The player renders the subtitle with KaTeX when the source still carries
+    # its math delimiters; speech stays plain text for the (future) TTS layer.
+    subtitle = re.sub(r"\s+", " ", speech_source).strip() or speech
     duration = max(estimate_duration_ms(speech_source), 1600 + 500 * len(board))
     duration = max(3000, min(60000, duration))
     return {
@@ -397,7 +400,7 @@ def _step(
         "source_refs": _dedupe(refs),
         "board": board,
         "speech": speech,
-        "subtitle": speech,
+        "subtitle": subtitle,
         "duration_ms": duration,
         "effects": _effects_for(board, duration),
     }
