@@ -379,8 +379,10 @@
           "avg_real_segments": 3.13,
           "note": "candidate recall only; final Exact/Similar/Unknown requires stage 2 LLM judge",
           "report": "docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-STAGE1.md",
-          "target_segment_metric": "INVALID_FOR_SEGMENTATION (trigram-overlap heuristic, not oracle)",
-          "note2": "photo-any-segment 100% remains; target-segment 100% must not be used as segmentation correctness evidence"
+          "target_segment_metric": "REVOKED_NOT_VALID_FOR_SEGMENTATION",
+          "note2": "photo-any-segment 100% remains; target-segment 100% must not be used as segmentation correctness evidence",
+          "provenance": "PURE_BM25_VERIFIED",
+          "provenance_evidence": "runs/qcore_semantic_expansion_01/v11/bge_m3/stage1_provenance.json"
         },
         "architecture_minimal_stage2_20261125": {
           "status": "CORRECTED_SEGMENTATION_ROOT_CAUSE",
@@ -406,7 +408,15 @@
             "false_exact": 0,
             "unknown": 0
           },
-          "root_cause": "target-segment selection/segmentation; Judge is capable when query is complete"
+          "root_cause": "target-segment selection/segmentation; Judge is capable when query is complete",
+          "oracle_full_query": {
+            "name": "Oracle Full-Query Judge Accuracy",
+            "n": 90,
+            "correct": 90,
+            "false_exact": 0,
+            "unknown": 0,
+            "diagnostic_only": true
+          }
         },
         "intent_disambiguation_20261125": {
           "status": "ROOT_CAUSE_SEGMENTATION",
@@ -421,7 +431,8 @@
             "correct": 90,
             "false_exact": 0
           },
-          "report": "docs/quality/EULER-RETRIEVAL-INTENT-DISAMBIGUATION-01.md"
+          "report": "docs/quality/EULER-RETRIEVAL-INTENT-DISAMBIGUATION-01.md",
+          "evidence_rule": "Judge must cite text present in Query/OCR; full candidate text need not appear verbatim; unverifiable conditions -> Unknown/user confirmation"
         }
       }
     }

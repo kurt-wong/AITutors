@@ -13,7 +13,8 @@
 1. **四个 False Exact 都有 target-segment/分段错误**，不是“Judge 随机选相邻题”。
 2. 用**完整目标题文本**作为 query、同一 Judge、同一候选集重跑：
    - 四个错误样本 **4/4 正确**；
-   - 全部 90 条 **90/90 正确，False Exact=0，Unknown=0**。
+   - 全部 90 条 **Oracle Full-Query Judge Accuracy = 100%（90/90）**，False Exact=0，Unknown=0；
+   - 这是**诊断性上限**，不是生产检索链路准确率，也不是所有题型的 Judge 能力保证。
 3. 因此：
    - **没有观察到独立的 `JUDGE_DISCRIMINATION_FAILURE`**；
    - 原阶段二的 4 个错误，是“错误的题段/Query 送进 Judge”造成的；
@@ -132,9 +133,12 @@ Stage2 的错误 Query 是一个不完整的题段；Judge 看到的候选却包
 
 - 只在用户已选定目标段后调用；
 - 只允许从候选中选；
-- 如果 Judge 选中的候选文本**不在当前 Query 段**，直接判为无效/Unknown；
-- LLM confidence 不能作为身份凭证；
-- 证据必须能在 Query/候选文本中定位。
+- **Evidence-grounded**：Judge 必须引用 Query 中实际存在、且能在原始 OCR 文本中定位的证据；
+- 候选题必须存在与引用证据相对应的内容；
+- **不要求候选题完整文本逐字出现在 Query 中**：用户可能只拍到部分题干，QCore 保存完整题干，仍可能是同一题；
+- 如果题号、关键条件、选项或材料归属无法验证，返回 Unknown 或交给用户确认；
+- 不允许引用 Query 中不存在的文字作为身份判断依据；
+- LLM confidence 不能作为身份凭证。
 
 ## 4.4 何时要求用户选择
 
@@ -175,7 +179,7 @@ RP05、RP39、RP40、RP43 进入专项回归：
 - 输入：原照片/OCR；
 - 断言：不得把非目标题当 Exact；
 - 断言：target-segment 必须覆盖完整目标题组；
-- 断言：Judge 选中的候选文本必须在 Query 段中；
+- 断言：Judge 引用的证据必须能在 Query/原始 OCR 中定位，不能引用不存在的文本；
 - 断言：多题照片必须要求用户选择目标。
 
 ---

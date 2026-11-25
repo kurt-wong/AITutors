@@ -8,6 +8,44 @@
 
 > **2026-11-25 修正：** 本文的 `target-segment` 100% 使用“三字组重叠最大”的启发式选段，不是 oracle 分段；RP05/RP39/RP40 已证明它会选错题组段（例如 RP39 选中 Q8 而非 Q6–8）。**该 target-segment 指标不得作为分段正确性的证据。** `photo-any-segment` 100% 仍成立。详见 `docs/quality/EULER-RETRIEVAL-INTENT-DISAMBIGUATION-01.md`。
 
+## 0. 来源核实：确实是纯 BM25
+
+在把结果作为“BM25 已验证”之前，做了两层核实。
+
+### 代码审计
+
+`stage1_bm25_segmented.py` 的实际调用链：
+
+- `SemanticIndex.from_catalog(catalog, embedder=None)`：只取题目文档/ID，**不加载任何 embedding**；
+- `BM25(docs)`：纯词法（字符 2/3-gram + ASCII token）的倒排/BM25 打分；
+- `split_questions()`：纯正则分段；
+- `top_ids()`：只对 BM25 分数排序；
+- 没有 `BgeM3Embedder.encode`、`DenseEmbedder.encode`、`SemanticIndex.search`、`V11Index.load`、`requests.post/get` 调用。
+
+`evaluate_bge_m3` 模块被 import 只为了复用 `BM25` 类和 `top_ids`；该模块的顶层 import 不会实例化模型，也不会发起 HTTP。
+
+### 动态证明
+
+`verify_stage1_bm25.py` 在运行阶段一前，把以下入口全部 patch 成“调用即抛错”：
+
+- `DenseEmbedder.encode`
+- `BgeM3Embedder.encode`
+- `BgeReranker.rerank`
+- `V11Index.load`
+- `SemanticIndex.search`
+- `requests.post`
+- `requests.get`
+
+结果：
+
+- 阶段一完整跑完；
+- `blocked_calls = []`；
+- `passed = true`。
+
+证据：`runs/qcore_semantic_expansion_01/v11/bge_m3/stage1_provenance.json`
+
+**结论：阶段一运行路径确实是纯 BM25，没有加载 Embedding、没有 Dense/Sparse/ColBERT、没有 HTTP、没有向量分数融合。** 结果文件放在 `v11/bge_m3/` 目录只是历史路径，不代表使用了 BGE-M3。
+
 ---
 
 ## 1. 目的
@@ -26,17 +64,17 @@
 - 真实照片：用 V1.1 `split_questions()` 按题号切段，再对每段 BM25；
 - 两种口径：
   1. **photo-any-segment**：目标题进入任意段的 top-k；
-  2. **target-segment**：用与目标题干的三字组重叠选出目标段（诊断用 oracle 分段），再看目标段 top-k；
+  2. **target-segment（已撤销）**：用与目标题干的三字组重叠选出目标段，曾被当作诊断用 oracle；后续四例证明该启发式会选错题组段，**不作为分段正确性证据**；
 - 统计 Recall@5/10/20；不调阈值，不调用 LLM，不使用 embedding。
 
 ---
 
 ## 3. 结果
 
-| 数据集 | 平均段数 | photo-any-segment @5/@10/@20 | target-segment @5/@10/@20 |
+| 数据集 | 平均段数 | photo-any-segment @5/@10/@20 | target-segment @5/@10/@20（撤销） |
 |---|---:|---:|---:|
-| 渲染 45 | 1.02 | **100% / 100% / 100%** | **100% / 100% / 100%** |
-| 真实 45 | 3.13 | **100% / 100% / 100%** | **100% / 100% / 100%** |
+| 渲染 45 | 1.02 | **100% / 100% / 100%** | 不作验收（启发式可能选错） |
+| 真实 45 | 3.13 | **100% / 100% / 100%** | 不作验收（启发式可能选错） |
 
 目标题排名分布：
 
@@ -61,7 +99,7 @@
 ## 5. 限制
 
 - 只有 45 渲染 + 45 真机，不能外推到十万题长尾；
-- target-segment 用 oracle 分段选择，实际系统的分段错误仍会造成失败；
+- target-segment 指标已撤销：三字组重叠启发式不是 oracle 分段，不能证明分段正确；
 - BM25 在 1166 题上强，不代表 10 万题上仍足够；
 - 未测 LLM 判断、False Exact、Similar/Unknown；
 - 未测用户选择成本。
