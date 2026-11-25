@@ -433,6 +433,25 @@
           },
           "report": "docs/quality/EULER-RETRIEVAL-INTENT-DISAMBIGUATION-01.md",
           "evidence_rule": "Judge must cite text present in Query/OCR; full candidate text need not appear verbatim; unverifiable conditions -> Unknown/user confirmation"
+        },
+        "retrieval_architecture_minimal_20261125": {
+          "status": "CLOSED_ACCEPTED",
+          "stage1_provenance": "PURE_BM25_VERIFIED",
+          "stage1_photo_any_segment_recall@5": 1.0,
+          "stage1_target_segment_metric": "REVOKED",
+          "stage2_historical_real": 0.8889,
+          "oracle_full_query": {
+            "correct": 90,
+            "n": 90,
+            "false_exact": 0,
+            "unknown": 0,
+            "diagnostic_only": true
+          },
+          "root_cause": "question structure/segmentation, not Judge capability",
+          "production_retrieval_verified": false,
+          "embedding_required": false,
+          "next_task": "EULER-QUESTION-SEGMENT-RECOVERY-01",
+          "report": "docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-CLOSURE.md"
         }
       }
     }

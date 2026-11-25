@@ -121,6 +121,7 @@
 - **轻量备选：qwen3-embedding:0.6b**（639MB、32k、23/38 Exact）；
 - 详细数据：`docs/quality/SEMANTIC_EMBEDDING_SELECTION_20261125.md`；
 - 当前动作：**V1 继续冻结 BGE；V1.1 候选不进入当前生产**，不静默替换；
+- **检索架构最小实验（2026-11-26）**：**CLOSED / ACCEPTED**。阶段一纯 BM25（动态阻断验证 `blocked_calls=[]`）在 45 渲染 + 45 真机上 `photo-any-segment Recall@5=100%`；`target-segment` 指标撤销；Oracle Full-Query Judge 90/90（诊断，不代生产）；四个 False Exact 根因是题目结构/分段错误，不是 Judge 能力。下一步 `EULER-QUESTION-SEGMENT-RECOVERY-01`。报告：`docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-CLOSURE.md`。
 - **BGE-M3 实测（2026-11-25）**：本地 llama.cpp 仅提供 dense，sparse/multi-vector 未暴露；45 渲染 + 45 真机上 BGE-M3 dense 未超过 gemma/BGE，BM25 为强基线，BGE-M3+BM25 加权 @10 达 100%（真机）但 @1 无优势；reranker 当前部署不可用。**Owner 裁决：BGE-M3 评测阶段性关闭，INCONCLUSIVE；不启动完整能力评测，不下载 HF/FlagEmbedding，不继续 ColBERT/reranker；BGE V1 冻结，BM25 作为独立候选通道。** 报告：`docs/quality/EULER-SEMANTIC-RETRIEVAL-BGE-M3-EVALUATION-01.md`；裁决：`docs/quality/SEMANTIC-RETRIEVAL-PRODUCT-DECISION-20261125.md`。
 - **多候选交互（2026-11-25）**：整页拍照允许，系统返回候选、用户选择目标题，**不再自动单一 Exact**；45 张真机照片上 gemma 目标 top-10 覆盖 45/45，BGE 44/45；原型 PASS，生产默认仍不切换。报告：`docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-MULTI-CANDIDATE-01.md`。
 - **孤立验证（2026-11-25）**：渲染 Holdout 45 条上 gemma-2 23/45、BGE 20/45，双方 0 False Exact；18 条独立负向双方 18/18 Unknown。**真机复验（45 张）**：BGE 20/45、gemma-2 16/45，双方各 **4 个 False Exact**，全部来自多题页面（模型选中相邻题，非凭空错题）。结论 **FAIL（strict target）**，不授权生产切换。报告：`docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-ISOLATED-VALIDATION-01.md`、`docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-REAL-PHOTO-VALIDATION-01.md`。
