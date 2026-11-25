@@ -4,8 +4,8 @@
 - 独立复核：MIMO（待提交）
 - 最终裁决：Owner
 - 日期：2026-11-25
-- 代码提交：`efe8caab4`（隔离 Adapter/索引/测试）
-- 基线：AITutors `b0010dbed`（任务开始时 `b0010dbed` 已推送）
+- 代码提交：`efe8caab4`（隔离 Adapter/索引/测试）、`dd10ca0cc`（验证报告与冻结基线）
+- 基线：AITutors `b0010dbed`（任务开始时已推送）；收工 HEAD 以仓库当前提交为准（本文档随验证报告一并提交）
 - 冻结候选：`embeddinggemma-2:latest`，`exact_dense=0.74 / similar_dense=0.85 / similar_lexical=0.55`
 - **最终状态：INSUFFICIENT EVIDENCE（不足以授权生产默认切换）**
 
