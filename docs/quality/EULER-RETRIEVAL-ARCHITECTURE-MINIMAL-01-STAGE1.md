@@ -6,6 +6,8 @@
 - 数据：45 渲染 Holdout + 45 真实手机照片 + 1166 QCore corpus
 - 状态：**阶段一 PASS（候选召回）；阶段二待 LLM Judge 确认**
 
+> **2026-11-25 修正：** 本文的 `target-segment` 100% 使用“三字组重叠最大”的启发式选段，不是 oracle 分段；RP05/RP39/RP40 已证明它会选错题组段（例如 RP39 选中 Q8 而非 Q6–8）。**该 target-segment 指标不得作为分段正确性的证据。** `photo-any-segment` 100% 仍成立。详见 `docs/quality/EULER-RETRIEVAL-INTENT-DISAMBIGUATION-01.md`。
+
 ---
 
 ## 1. 目的

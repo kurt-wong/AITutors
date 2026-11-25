@@ -378,10 +378,12 @@
           },
           "avg_real_segments": 3.13,
           "note": "candidate recall only; final Exact/Similar/Unknown requires stage 2 LLM judge",
-          "report": "docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-STAGE1.md"
+          "report": "docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-STAGE1.md",
+          "target_segment_metric": "INVALID_FOR_SEGMENTATION (trigram-overlap heuristic, not oracle)",
+          "note2": "photo-any-segment 100% remains; target-segment 100% must not be used as segmentation correctness evidence"
         },
         "architecture_minimal_stage2_20261125": {
-          "status": "PARTIAL_ADJACENT_AMBIGUITY",
+          "status": "CORRECTED_SEGMENTATION_ROOT_CAUSE",
           "judge": "qwythos-9b:latest (9.2B Q4_K_M local; qwen3.5:9b tag absent)",
           "rendered_45": {
             "exact_ok": 43,
@@ -397,7 +399,29 @@
           },
           "false_exact_cause": "adjacent question/题组 within the same photo; target candidate present",
           "embedding_needed": false,
-          "report": "docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-STAGE2.md"
+          "report": "docs/quality/EULER-RETRIEVAL-ARCHITECTURE-MINIMAL-01-STAGE2.md",
+          "true_oracle_query": {
+            "n": 90,
+            "correct": 90,
+            "false_exact": 0,
+            "unknown": 0
+          },
+          "root_cause": "target-segment selection/segmentation; Judge is capable when query is complete"
+        },
+        "intent_disambiguation_20261125": {
+          "status": "ROOT_CAUSE_SEGMENTATION",
+          "cases": {
+            "RP05": "SEGMENT_SPLIT (+user ambiguity secondary)",
+            "RP39": "SEGMENT_SPLIT+GROUP_OWNERSHIP",
+            "RP40": "SEGMENT_SPLIT+USER_INTENT_AMBIGUITY",
+            "RP43": "SEGMENT_MERGE+USER_INTENT_AMBIGUITY"
+          },
+          "judge_discrimination_failure_observed": false,
+          "true_oracle_query_90": {
+            "correct": 90,
+            "false_exact": 0
+          },
+          "report": "docs/quality/EULER-RETRIEVAL-INTENT-DISAMBIGUATION-01.md"
         }
       }
     }

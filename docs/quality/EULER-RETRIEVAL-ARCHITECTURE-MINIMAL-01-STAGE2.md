@@ -7,6 +7,8 @@
 - 候选：目标题 + 19 个 BM25 近邻干扰项，随机打乱；目标始终在候选内
 - 状态：**Oracle 部分通过；真机仍有 4 个相邻题 False Exact；不进入生产**
 
+> **2026-11-25 修正：** 本文的 Stage2 使用启发式 target-segment；四例 False Exact 的主因是 **target-segment/分段错误**，不是 Judge 能力不足。用完整目标题 Query、同一 Judge、同一候选重跑：四例 **4/4 正确**，全部 90 条 **90/90 正确、0 False Exact**。因此本文的“Judge 部分通过”应理解为“坏 Query 回归”，不是 Judge 上限。详见 `docs/quality/EULER-RETRIEVAL-INTENT-DISAMBIGUATION-01.md`。
+
 ---
 
 ## 1. 目的
