@@ -260,7 +260,7 @@
         "decision": "V1.1 primary candidate; do not silently replace frozen V1 BGE",
         "evidence": "docs/quality/SEMANTIC_EMBEDDING_SELECTION_20261125.md",
         "validation_20261125": {
-          "status": "INSUFFICIENT_EVIDENCE",
+          "status": "FAIL_STRICT_TARGET",
           "holdout_r2": {
             "n": 45,
             "bge_exact": 20,
@@ -279,9 +279,30 @@
             "negatives": 37,
             "independent": false
           },
-          "limitation": "no 45 real-camera photos; no independent Similar labels; holdout is rendered_photo_style",
+          "limitation": "strict target on multi-question photos fails; single-question crop or multi-candidate UX required",
           "production_switch_authorized": false,
-          "report": "docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-ISOLATED-VALIDATION-01.md"
+          "report": "docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-ISOLATED-VALIDATION-01.md",
+          "real_photos_20261125": {
+            "n": 45,
+            "capture_mode": "real_camera",
+            "camera": "iPhone 12 Pro Max",
+            "manifest_sha256": "e407ba721836606789444b1e3c2c0a07ab1c7060c03c1d5fd6b1f5bae37378a2",
+            "bge_v1": {
+              "exact": 20,
+              "false_exact": 4,
+              "similar": 11,
+              "unknown": 10
+            },
+            "gemma_v11": {
+              "exact": 16,
+              "false_exact": 4,
+              "similar": 9,
+              "unknown": 16
+            },
+            "false_exact_root_cause": "multi-question page photos; top1 question is visible in the same photo, but not the intended target",
+            "production_switch_authorized": false,
+            "report": "docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-REAL-PHOTO-VALIDATION-01.md"
+          }
         }
       }
     }

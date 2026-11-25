@@ -7,7 +7,8 @@
 - 代码提交：`efe8caab4`（隔离 Adapter/索引/测试）、`dd10ca0cc`（验证报告与冻结基线）
 - 基线：AITutors `b0010dbed`（任务开始时已推送）；收工 HEAD 以仓库当前提交为准（本文档随验证报告一并提交）
 - 冻结候选：`embeddinggemma-2:latest`，`exact_dense=0.74 / similar_dense=0.85 / similar_lexical=0.55`
-- **最终状态：INSUFFICIENT EVIDENCE（不足以授权生产默认切换）**
+- **最终状态：INSUFFICIENT EVIDENCE（渲染 Holdout 阶段）**
+- **2026-11-25 真机复验更新：FAIL（strict target）——45 张真实照片中 BGE 与 gemma-2 各有 4 个 False Exact；生产默认不切换。见 `docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-REAL-PHOTO-VALIDATION-01.md`。**
 
 ---
 
@@ -224,7 +225,7 @@ Similar 的 false positive 必须在报告中同时披露正例命中、false si
 2. 独立 Similar 正例金标没有建立；
 3. 无法证明“不同光照/角度/裁剪/真实 OCR 噪声”下的稳定性。
 
-按任务书三类结论，只能给 **INSUFFICIENT EVIDENCE**，不能给 PASS，也不能给 FAIL（没有在有效数据上触发安全失败）。
+在只有渲染 Holdout、尚无真实照片的阶段，按任务书三类结论只能给 **INSUFFICIENT EVIDENCE**；2026-11-25 真机复验后，严格目标判定已转为 **FAIL**（双方各 4 个 False Exact，且全部来自多题页面），见真机报告。
 
 ---
 
