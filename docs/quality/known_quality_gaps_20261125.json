@@ -303,6 +303,25 @@
             "production_switch_authorized": false,
             "report": "docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-REAL-PHOTO-VALIDATION-01.md"
           }
+        },
+        "multi_candidate_20261125": {
+          "status": "PROTOTYPE_PASS",
+          "mode": "full_page_photo -> multiple candidates -> user selects target",
+          "bge_v1": {
+            "coverage@10": 0.9778,
+            "missing": [
+              "IMG_8142.jpeg"
+            ],
+            "avg_candidates": 15.24
+          },
+          "gemma_v11": {
+            "coverage@10": 1.0,
+            "missing": [],
+            "avg_candidates": 14.67
+          },
+          "auto_exact_count": 0,
+          "production_switch_authorized": false,
+          "report": "docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-MULTI-CANDIDATE-01.md"
         }
       }
     }

@@ -10,6 +10,7 @@ from pathlib import Path
 from .config import V11Config
 from .index import V11Index
 from .model import DEFAULT_BASE_URL, DEFAULT_MODEL, OllamaGemmaEmbedder
+from .multi import MultiCandidateIndex
 
 
 def _load_catalog(path: str) -> list[dict]:
@@ -47,6 +48,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_multi(args: argparse.Namespace) -> int:
+    adapter = OllamaGemmaEmbedder(args.model, base_url=args.base_url)
+    index = V11Index.load(args.index, adapter, expected_config=V11Config())
+    result = MultiCandidateIndex(index).search(args.query, per_segment=args.per_segment, whole_page=args.whole_page)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m tsc_compiler.semantic.v11.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -74,6 +83,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("verify", parents=[common])
     p.add_argument("--index", required=True)
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("multi", parents=[common])
+    p.add_argument("--index", required=True)
+    p.add_argument("--query", required=True)
+    p.add_argument("--per-segment", type=int, default=5)
+    p.add_argument("--whole-page", type=int, default=10)
+    p.set_defaults(func=cmd_multi)
     return parser
 
 

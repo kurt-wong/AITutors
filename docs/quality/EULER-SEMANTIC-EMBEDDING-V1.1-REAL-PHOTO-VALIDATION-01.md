@@ -7,6 +7,7 @@
 - 标签 manifest SHA-256：`e407ba721836606789444b1e3c2c0a07ab1c7060c03c1d5fd6b1f5bae37378a2`
 - 冻结配置：`.74/.85/.55`，未因本次结果调整
 - **最终状态：FAIL（strict target）**
+- **2026-11-25 后续：Owner 选择“整页拍照 + 多候选 + 用户选择”；隔离原型 gemma 45/45 目标进入 top-10、BGE 44/45，且不再自动输出单一 Exact。见 `docs/quality/EULER-SEMANTIC-EMBEDDING-V1.1-MULTI-CANDIDATE-01.md`。生产默认仍不切换。**
 - **生产默认模型：不切换，BGE V1 继续冻结**
 
 ---

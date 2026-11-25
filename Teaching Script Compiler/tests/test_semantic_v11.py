@@ -17,6 +17,7 @@ from tsc_compiler.semantic.v11.model import (
     OllamaGemmaEmbedder,
     V11InputError,
 )
+from tsc_compiler.semantic.v11.multi import MultiCandidateIndex, split_questions
 
 
 def _entry(qid: str, stem: str) -> dict:
@@ -122,3 +123,35 @@ def test_input_validation_rejects_empty_and_oversize():
     with pytest.raises(V11InputError):
         adapter._validate_texts(["123456"])
     assert adapter._validate_texts(["12345"]) == ["12345"]
+
+
+def test_split_questions_on_page():
+    text = (
+        "1. 已知函数 $f(x)=x^2$，求最小值。\nA. 0 B. 1\n"
+        "2. 电场中带电粒子的运动，求加速度。\nA. 1 B. 2\n"
+    )
+    segments = split_questions(text)
+    assert len(segments) == 2
+    assert [s.number for s in segments] == ["1", "2"]
+    assert "电场" in segments[1].text
+
+
+def test_multi_candidate_never_auto_exact_and_unions_candidates():
+    class FakeSearch:
+        def search(self, text, top_k=10):
+            return {
+                "decision": "exact",
+                "exact": {"question_id": "q1"},
+                "similar": [],
+                "candidates": [
+                    {"question_id": "q1", "score": 0.9, "dense": 0.9, "lexical": 0.9},
+                    {"question_id": "q2", "score": 0.8, "dense": 0.8, "lexical": 0.8},
+                ],
+            }
+
+    result = MultiCandidateIndex(FakeSearch()).search("1. 第一题内容足够长。\n2. 第二题内容足够长。")
+    assert result["status"] == "needs_user_selection"
+    assert result["auto_exact"] is None
+    assert result["requires_user_selection"] is True
+    assert {c["question_id"] for c in result["candidates"]} == {"q1", "q2"}
+    assert all(c["requires_user_selection"] is True for c in result["candidates"])
