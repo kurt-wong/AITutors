@@ -86,3 +86,10 @@ def test_chunk_text_must_come_from_source() -> None:
     )
     first_text["text"] = "这一句不是源文本"
     assert "board_text_from_source" in failed(script, bundle)
+
+def test_section_marker_is_layout_not_content():
+    from tsc_compiler.validator import _strip_section_markers
+
+    # \u3010\u5206\u6790\u3011 = the CJK section marker; escapes keep this file ASCII.
+    assert _strip_section_markers("5.\u3010\u5206\u6790\u3011X") == "5.X"
+    assert _strip_section_markers("\u3010\u8be6\u89e3\u3011A") == "A"

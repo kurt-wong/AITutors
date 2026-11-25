@@ -377,6 +377,19 @@ def _check_step_shape(script: dict[str, Any]) -> list[dict[str, str]]:
     return [_res("step_contract", not problems, "; ".join(problems[:8]))]
 
 
+_SECTION_MARKER = re.compile(r"【(?:分析|详解|点睛|答案|解析|解答|小问)】")
+
+
+def _strip_section_markers(text: str) -> str:
+    """Remove structural section labels before source containment checks.
+
+    The board deliberately renders clean prose (``5.利用…``) while the source
+    keeps the publication marker (``5.【分析】利用…``). The marker is layout,
+    not content, so it must not make an otherwise verbatim chunk fail.
+    """
+    return _SECTION_MARKER.sub("", text or "")
+
+
 def _check_board_text_sources(script: dict[str, Any]) -> list[dict[str, str]]:
     """Every rendered text chunk must be a substring of the source it cites."""
     problems: list[str] = []
@@ -390,7 +403,7 @@ def _check_board_text_sources(script: dict[str, Any]) -> list[dict[str, str]]:
             if record.get("kind") not in ("content_block", "explanation_block"):
                 continue
             needle = _norm_ws(block.get("text") or "")
-            haystack = _norm_ws(record.get("text") or "")
+            haystack = _norm_ws(_strip_section_markers(record.get("text") or ""))
             if needle and needle not in haystack:
                 problems.append(f"{block.get('id')}: text not contained in {ref}")
     return [_res("board_text_from_source", not problems, "; ".join(problems[:8]))]
