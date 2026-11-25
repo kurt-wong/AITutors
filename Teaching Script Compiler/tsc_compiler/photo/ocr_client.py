@@ -8,6 +8,7 @@ evidence*: it can select a question, never rewrite one.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -98,6 +99,7 @@ def ocr_bytes(
     poll_seconds: float = 2.0,
     timeout_seconds: float = 240.0,
     max_attempts: int = 2,
+    include_raw: bool = False,
 ) -> dict[str, Any]:
     """Submit one image/PDF; return ``{status, text, pages, job_id, duration_s}``."""
     token = _token(settings)
@@ -161,7 +163,7 @@ def ocr_bytes(
                 last_error = "empty OCR markdown"
                 time.sleep(3)
                 continue
-            return {
+            result = {
                 "status": "ok",
                 "engine": settings.ocr_model,
                 "text": text,
@@ -171,6 +173,11 @@ def ocr_bytes(
                 "duration_s": round(time.time() - started, 1),
                 "optional_payload": optional_payload,
             }
+            if include_raw:
+                raw = download.text
+                result["raw_jsonl"] = raw
+                result["raw_sha256"] = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+            return result
         except Exception as exc:  # noqa: BLE001 - network/API errors are all retryable here
             last_error = f"exception: {exc}"
             time.sleep(3)

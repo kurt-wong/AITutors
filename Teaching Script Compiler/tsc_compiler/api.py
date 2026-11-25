@@ -32,6 +32,7 @@ from .config import Settings, ensure_dirs
 from .photo.ocr_client import ocr_bytes
 from .photo.search import persist_search, search_text
 from .qcore_source import load_bundle, load_catalog, load_meta
+from .semantic.question_structure import analyze_page
 from .service import get_or_compile, teaching_bundle
 
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
@@ -131,6 +132,7 @@ def create_app(settings: Settings) -> FastAPI:
                     write_job(job)
                 return
             result = search_text(settings, ocr["text"], use_llm=use_llm)
+            result["structure"] = analyze_page(ocr["text"]).to_dict()
             result["ocr"] = {
                 "status": "ok",
                 "engine": ocr.get("engine"),
@@ -326,6 +328,7 @@ def create_app(settings: Settings) -> FastAPI:
     @app.post("/api/search/text")
     def search_text_api(body: TextSearchRequest) -> JSONResponse:
         result = search_text(settings, body.text, use_llm=body.use_llm)
+        result["structure"] = analyze_page(body.text).to_dict()
         persist_search(settings, result, ocr_text=body.text)
         return _no_store(JSONResponse(result))
 
@@ -357,6 +360,7 @@ def create_app(settings: Settings) -> FastAPI:
                 )
             )
         result = search_text(settings, ocr["text"], use_llm=use_llm)
+        result["structure"] = analyze_page(ocr["text"]).to_dict()
         result["ocr"] = {
             "status": "ok",
             "engine": ocr.get("engine"),
