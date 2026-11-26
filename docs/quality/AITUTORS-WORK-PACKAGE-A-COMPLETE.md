@@ -69,7 +69,16 @@ SHA256 = 9a852ddc1d9849fbd9acf6d6194975363669637c384c5947c7ce6c01960be02f
 
 ```text
 _dsh/workpackage_a/authoritative_published.json
+_dsh/workpackage_a/published_hash_preimage.txt
 ```
+
+N-A 哈希勘误：preimage 为 169 行 `question_id:revision_id`（按 question_id、revision_number 排序），无尾随换行；复算命令：
+
+```powershell
+(Get-FileHash "_dsh/workpackage_a/published_hash_preimage.txt" -Algorithm SHA256).Hash.ToLower()
+```
+
+结果与 `9a852ddc...` 一致；不是无法复现的校验值。
 
 与 Compiler：
 
