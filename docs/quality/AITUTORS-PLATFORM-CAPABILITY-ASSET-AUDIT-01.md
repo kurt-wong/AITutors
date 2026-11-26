@@ -5,6 +5,7 @@
 - 范围：P0 DeepTutor 原生能力 + P1 QCore 现有 NLP 资产
 - 相关外部资产：`D:\Project\NLP\six-subject-kg`、`D:\Project\Mytutors`
 - 工作包 A 事实核查：[AITUTORS-WORK-PACKAGE-A-01.md](AITUTORS-WORK-PACKAGE-A-01.md)
+- A2/A3/A4 执行报告：[AITUTORS-WORK-PACKAGE-A-A2-A4.md](AITUTORS-WORK-PACKAGE-A-A2-A4.md)
 
 ---
 
