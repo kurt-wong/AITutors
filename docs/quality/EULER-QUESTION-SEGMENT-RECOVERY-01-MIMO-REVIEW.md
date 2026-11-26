@@ -132,11 +132,11 @@ reviewed/*.json
 
 | ID | 状态 | 证据 |
 |---|---|---|
-| C1 DT gitlink | **已清** | 根仓 gitlink `3a3b84ec773925824957b96118fea529a6e31735`；根仓提交 `88584f92f` |
-| C2 交付边界 | **已清** | `EULER-QUESTION-SEGMENT-RECOVERY-01-ANNOTATION.md` 已提交（同 `88584f92f`） |
-| C3 完整边界金标 | 未做 | 不挡四 FE 根因关闭；Owner 字面标准另定 |
-| C4 真实整图 E2E | 不要求 | OCR 质量由 Preprocessing 覆盖；E2E 固定 OCR 边界 |
-| C5 12 条 auto_cleaned 二次抽样 | 未做 | 不挡根因关闭；记录为 assisted 残留 |
+| C1 DT gitlink | **已清** | 根仓 gitlink `e7d525a88eccf57498c6f376fe0b00a4ba81860a`；根仓提交 `0dd6f9137` |
+| C2 交付边界 | **已清** | `EULER-QUESTION-SEGMENT-RECOVERY-01-ANNOTATION.md` 已提交（`88584f92f`） |
+| C3 边界记录 | **已补** | `boundary_gold_24.json`：24/24 block-level；22/24 题号匹配；RP05/RP18 偏移显式标记；assisted，不是独立人工 |
+| C4 真实整图 E2E | **已清** | `qcore-teach-real.audit.ts`：真实 OCR → 目标选择 → search-text → 候选；1 passed（2.3m） |
+| C5 auto_cleaned 抽样 | **已清** | seed 20261126 抽 5 条：RP18/RP40/RP01/RP02/RP10，5/5 pass |
 
 ### 交付边界说明
 
@@ -151,9 +151,12 @@ reviewed/*.json
 MIMO_CONDITIONAL_PASS
 C1 = CLEARED
 C2 = CLEARED
-C3/C4/C5 = 不阻断根因关闭（见上）
-OWNER_ACCEPTANCE = PENDING
+C3 = CLEARED (assisted block boundary; independent human gold not claimed)
+C4 = CLEARED (real photo E2E, 1 passed)
+C5 = CLEARED (5/5 sampled)
+STATUS = MIMO_RE_REVIEW_READY
 ```
 
-不写成 `MIMO_PASS`；不声称真实四场景 E2E 已完成；不声称完整独立人工边界金标。
+不写成 `MIMO_PASS`；C3 仍明确是 assisted，不冒充独立人工逐条金标；C4 只覆盖多题目标选择真实链路，不声称四场景全矩阵。
+
 
