@@ -45,7 +45,7 @@
 
 | 字段 | 含义 |
 |---|---|
-| `status` | `reliable`：唯一目标且结构完整；`ambiguous`：多题/边界不确定，必须用户选；`incomplete`：OCR/结构缺失，无法形成完整 Query；`invalid`：边界冲突 |
+| `status` | `reliable`：唯一目标且结构清晰；`ambiguous`：多题/边界不确定，需要用户选目标；`incomplete`：**没有可靠 QCore 候选/新增题，无法作答**；`invalid`：边界冲突。**照片里少材料本身不等于 incomplete：只要可见内容能定位 QCore 题，QCore 会补全材料。** |
 | `segments` | 照片中所有题目/题组；以 raw OCR block 为最小单位 |
 | `kind` | `question`（独立题）、`group`（共享材料题组）、`subquestion`（题组内小问）、`orphan`（无法归属的尾部/片段） |
 | `block_ids` | 该题占用的 raw OCR block id（不要跨 block 补 OCR 没有的字） |
@@ -118,13 +118,15 @@
 ### RP05 / IMG_8127
 
 - 照片上方 Q16/Q17 的题号未被 OCR 识别；OCR 只有 Q18/Q19/Q20；
-- 不允许补写 Q16/Q17；
+- 共享材料在上一页，照片里没有；
+- **关键：不要要求用户补材料。** 可见的 Q16–19 内容足以定位 QCore 的 Q16–19；QCore 本身带完整材料和全部小问。
 - 金标：
-  - S1 = block 18（OCR 段），S2 = block 19，S3 = block 20；
-  - 目标 Q16-19 结构不完整：`status="incomplete"`；
-  - `target_segment_ids` 可为空或标出可见的 Q18/Q19；
-  - Query 为空或在 notes 写 `cannot form complete Q16-19 query`；
-  - 系统应要求用户重新拍摄/选择，而不是自动 Exact。
+  - 把 Q16–19 可见内容合成一个 `group` 题段（block 2-5），题号写 `16-19`；
+  - `status="ambiguous"`（因为同页还有 Q20，多题需要用户选目标；不是因为材料缺失）；
+  - `target_segment_ids` 指向该题组；
+  - **`query_text` 用可见 OCR 内容即可，不要留空**；
+  - notes 写 `共享材料在上一页未拍入；若候选确认到 QCore Q16-19，由 QCore 补全材料`；
+  - 只有“无 QCore 候选/新增题”时才标 `incomplete` 并提示补拍材料。
 
 ---
 
@@ -133,8 +135,9 @@
 - **不得用 QCore 候选题的文字补 OCR**；
 - **不得把上一题尾部当作下一题材料**；
 - **不得把未选中的相邻题并入 Query**；
-- **不确定就标 ambiguous/incomplete**，不要为了“看起来完整”硬拼；
-- 共享材料必须来自 OCR block，不能用题库材料补；
+- **不确定就标 ambiguous**；只有“无 QCore 候选/新增题”才标 incomplete；
+- Query 是检索证据，允许只含照片可见内容；QCore 命中后由 QCore 提供完整材料；
+- 不要把 QCore 的材料反向抄进 Query；也不要因为照片缺材料就让 Query 留空；
 - 同一道题的题组必须保留完整小问；不要只截一个子问。
 
 ---
