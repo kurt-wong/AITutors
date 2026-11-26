@@ -75,3 +75,33 @@ def test_no_number_is_incomplete():
     assert structure.status == StructureStatus.INCOMPLETE
     assert structure.units == []
     assert structure.requires_selection is True
+
+
+def test_raw_material_is_attached_to_following_units():
+    blocks = [
+        {"block_label": "text", "block_content": "5. 前一道题\nA. 甲 B. 乙"},
+        {
+            "block_label": "text",
+            "block_content": "长江经济带发展已经上升为国家战略。据此完成下面小题。",
+        },
+        {"block_label": "text", "block_content": "6. 第一问的完整题目内容\nA. 甲 B. 乙"},
+        {"block_label": "text", "block_content": "7. 第二问的完整题目内容\nA. 甲 B. 乙"},
+    ]
+    raw = json.dumps(
+        {
+            "result": {
+                "layoutParsingResults": [
+                    {"prunedResult": {"parsing_res_list": blocks}},
+                ]
+            }
+        },
+        ensure_ascii=False,
+    )
+    text = "\n".join(block["block_content"] for block in blocks)
+    structure = analyze_page(text, raw_jsonl=raw)
+    assert structure.units[1].context.startswith("长江经济带")
+    assert structure.units[2].context.startswith("长江经济带")
+    query = structure.query_for([1, 2])
+    assert "长江经济带" in query
+    assert "5. 前一道题" not in query
+

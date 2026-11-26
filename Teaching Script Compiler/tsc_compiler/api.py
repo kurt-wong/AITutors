@@ -115,6 +115,7 @@ def create_app(settings: Settings) -> FastAPI:
                 filename=filename,
                 timeout_seconds=settings.ocr_timeout_s,
                 max_attempts=settings.ocr_max_attempts,
+                include_raw=True,
             )
             if ocr.get("status") != "ok":
                 with job_lock:
@@ -132,7 +133,9 @@ def create_app(settings: Settings) -> FastAPI:
                     write_job(job)
                 return
             result = search_text(settings, ocr["text"], use_llm=use_llm)
-            result["structure"] = analyze_page(ocr["text"]).to_dict()
+            result["structure"] = analyze_page(
+                ocr["text"], raw_jsonl=ocr.get("raw_jsonl")
+            ).to_dict()
             result["ocr"] = {
                 "status": "ok",
                 "engine": ocr.get("engine"),
@@ -347,6 +350,7 @@ def create_app(settings: Settings) -> FastAPI:
             filename=upload_path.name,
             timeout_seconds=settings.ocr_timeout_s,
             max_attempts=settings.ocr_max_attempts,
+            include_raw=True,
         )
         if ocr.get("status") != "ok":
             return _no_store(
@@ -360,7 +364,9 @@ def create_app(settings: Settings) -> FastAPI:
                 )
             )
         result = search_text(settings, ocr["text"], use_llm=use_llm)
-        result["structure"] = analyze_page(ocr["text"]).to_dict()
+        result["structure"] = analyze_page(
+            ocr["text"], raw_jsonl=ocr.get("raw_jsonl")
+        ).to_dict()
         result["ocr"] = {
             "status": "ok",
             "engine": ocr.get("engine"),

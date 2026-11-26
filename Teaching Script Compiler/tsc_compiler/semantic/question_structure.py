@@ -7,6 +7,7 @@ building a retrieval query.
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from enum import Enum
@@ -30,6 +31,7 @@ class QuestionUnit:
     text: str
     start: int
     end: int
+    context: str = ""
 
 
 @dataclass
@@ -45,7 +47,13 @@ class PageStructure:
     def requires_selection(self) -> bool:
         return self.status != StructureStatus.RELIABLE
 
-    def query_for(self, indices: list[int], *, include_prefix: bool = True) -> str:
+    def query_for(
+        self,
+        indices: list[int],
+        *,
+        include_prefix: bool = True,
+        include_context: bool = True,
+    ) -> str:
         chosen = []
         for index in sorted(set(indices)):
             if index < 0 or index >= len(self.units):
@@ -56,6 +64,12 @@ class PageStructure:
         parts = []
         if include_prefix and self.prefix and not self.prefix_is_tail:
             parts.append(self.prefix)
+        if include_context:
+            contexts = []
+            for unit in chosen:
+                if unit.context and unit.context not in contexts:
+                    contexts.append(unit.context)
+            parts.extend(contexts)
         parts.extend(unit.text for unit in chosen)
         return "\n".join(part.strip() for part in parts if part.strip())
 
@@ -76,6 +90,7 @@ class PageStructure:
                     "start": unit.start,
                     "end": unit.end,
                     "text": unit.text,
+                    "context": unit.context,
                     "preview": unit.text[:240],
                 }
                 for unit in self.units
@@ -83,7 +98,44 @@ class PageStructure:
         }
 
 
-def analyze_page(text: str, *, min_chars: int = 20) -> PageStructure:
+def _raw_contexts(raw_jsonl: str | None) -> dict[str, str]:
+    """Map OCR material blocks to the numbered questions that follow them.
+
+    llama.cpp/PaddleOCR raw JSONL is untrusted layout data; this only uses the
+    ordered ``parsing_res_list`` text blocks to attach an explicit material
+    block. It never rewrites the OCR text.
+    """
+    if not raw_jsonl:
+        return {}
+    contexts: dict[str, str] = {}
+    try:
+        payload = json.loads(raw_jsonl.splitlines()[0])
+        pages = payload.get("result", {}).get("layoutParsingResults") or []
+    except (ValueError, AttributeError, IndexError):
+        return {}
+    pending = ""
+    for page in pages:
+        blocks = page.get("prunedResult", {}).get("parsing_res_list") or []
+        for block in blocks:
+            content = str(block.get("block_content") or "").strip()
+            if not content:
+                continue
+            match = _NUMBERED.match(content)
+            if match:
+                if pending:
+                    contexts[match.group(1)] = pending
+                continue
+            if _SUBQUESTION.match(content):
+                # A leading sub-question marker is the previous question's tail,
+                # not shared material for the next question.
+                pending = ""
+                continue
+            if _MATERIAL_HINT.search(content) and len(content) >= 20:
+                pending = content
+    return contexts
+
+
+def analyze_page(text: str, *, min_chars: int = 20, raw_jsonl: str | None = None) -> PageStructure:
     value = (text or "").strip()
     if not value:
         return PageStructure(value, "", [], StructureStatus.INCOMPLETE, ["EMPTY_OCR"])
@@ -98,6 +150,7 @@ def analyze_page(text: str, *, min_chars: int = 20) -> PageStructure:
             ["NO_QUESTION_NUMBER"],
         )
 
+    contexts = _raw_contexts(raw_jsonl)
     prefix = value[: matches[0].start()].strip()
     units: list[QuestionUnit] = []
     for position, match in enumerate(matches):
@@ -105,7 +158,17 @@ def analyze_page(text: str, *, min_chars: int = 20) -> PageStructure:
         end = matches[position + 1].start() if position + 1 < len(matches) else len(value)
         body = value[start:end].strip()
         if len(body) >= min_chars:
-            units.append(QuestionUnit(len(units), match.group(1), body, start, end))
+            number = match.group(1)
+            units.append(
+                QuestionUnit(
+                    len(units),
+                    number,
+                    body,
+                    start,
+                    end,
+                    contexts.get(number, ""),
+                )
+            )
 
     if not units:
         return PageStructure(value, prefix, [], StructureStatus.INCOMPLETE, ["NO_VALID_UNIT"])
@@ -125,9 +188,10 @@ def analyze_page(text: str, *, min_chars: int = 20) -> PageStructure:
     elif prefix_is_tail:
         status = StructureStatus.AMBIGUOUS
     elif prefix and len(prefix) > 40 and not _MATERIAL_HINT.search(prefix):
-        # A long unnumbered leading block with a single numbered unit is more
-        # likely missing question number(s) than a complete material preamble.
-        status = StructureStatus.INCOMPLETE
+        # A long unnumbered leading block with a single numbered unit is most
+        # likely a missing number or the previous question's tail. Both need
+        # explicit user selection; do not guess it as part of this question.
+        status = StructureStatus.AMBIGUOUS
         reasons.append("PREFIX_WITHOUT_NUMBER")
     else:
         status = StructureStatus.RELIABLE
