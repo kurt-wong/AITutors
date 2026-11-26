@@ -3,7 +3,7 @@
 - 日期：2026-11-26
 - 执行：DSH
 - 状态：**DSH_PARTIAL / MIMO_NOT_READY**
-- 原因：结构内核、OCR raw、目标选择 UI 已落地并通过相关测试；但题组共享材料进入 Query、20 个人工结构金标、浏览器 E2E 尚未完成，不能按任务书宣称 DSH_COMPLETE。
+- 原因：结构内核、OCR raw、题组共享材料、目标选择 UI、20 例结构状态金标已落地；但浏览器 E2E、逐题完整人工边界金标和表级快照报告尚未完成，不能按任务书宣称 DSH_COMPLETE。
 
 ---
 
@@ -67,24 +67,26 @@
 
 - 20 张额外照片全部重跑 raw OCR；
 - 用原始 OCR block 中的题号与结构内核 units 对比：**20/20 题号序列一致**；
-- 状态分布：`ambiguous` 18、`reliable` 1、`incomplete` 1；
-- 证据：`structure_audit_20.json`。
+- 人工 contact-sheet/OCR 状态核对：18 ambiguous、1 reliable（IMG_8136）、1 ambiguous（IMG_8133，上一题尾部）；
+- 状态金标与内核：**20/20 一致**；
+- 证据：`structure_audit_20.json`、`structure_gold_20.json`。
 
-注意：这是 **OCR block 级审计**，不是独立人工结构金标。
+注意：这是 **状态级人工审计**；逐题完整边界/共享材料人工金标仍未完成。
 
 ---
 
 ## 2. 未完成 / 不能宣称完成
 
-### 2.1 题组共享材料尚未完整进入 Query
+### 2.1 题组共享材料已实现（本轮补齐）
 
-当前 UI 支持多选题段，并可将非尾部 `prefix` 带入 Query；但 RP39/RP40 这类共享材料位于**前一个题段内部**（如 Q5 段末尾的“据此完成下面小题”），当前选择 Q6–8 时不会自动把该材料带入 Query。
+- raw OCR 的独立 material block 会挂到后续 Q6/Q7/Q8 或 Q21/Q22；
+- UI 选择题组后，Query 自动包含共享材料；
+- RP39 的“长江经济带…”和 RP40 的“太阳能光热电站…”已验证进入 Query；
+- RP43 的 Q32(4) 尾部不再被当作 Q33 的 context。
 
-这是任务书“综合题保留共享材料”的硬要求，本轮未完成。
+### 2.2 20 个额外样本没有逐题完整人工边界金标
 
-### 2.2 20 个额外样本没有独立人工结构金标
-
-当前只做了 OCR block 级题号一致性审计；没有逐张人工核定题目边界、题组归属和共享材料。任务书要求的人工结构金标未完成。
+已有 20 例状态级人工审计（status 20/20），但没有逐张人工核定所有题段边界、共享材料归属和 Query 文本。任务书要求的完整人工结构金标未完成。
 
 ### 2.3 浏览器 E2E 未执行
 
@@ -106,17 +108,18 @@ DeepTutor QCoreTeachPage 目前只有 Vitest 组件测试，没有启动完整 D
 
 | 项 | 结果 |
 |---|---|
-| Compiler full pytest | **63 passed** |
-| 结构专项 | **10 passed** |
+| Compiler full pytest | **64 passed** |
+| 结构专项 | **11 passed** |
 | DeepTutor qcore-teach | **5 passed** |
-| DeepTutor `tsc --noEmit` | 通过 |
+| DeepTutor `tsc --noEmit` / `npm run build` | 通过 |
 | 生产 guard | 与冻结基线全等 |
 | OCR v2 | 24/24 ok，raw 全部保存 |
+| 20 例状态金标 | 20/20 一致 |
 
 提交：
 
-- AITutors 根仓：`80780c7defe6b8f8881d5cd2c63b08d735ba8d33`（已推送 `origin/main`）
-- DeepTutor：`60e56673e8bbf5d9b700dcfd8d2d68ef473cb5e5`（已推送 `fork/aitutor/deeptutor-integration`）
+- AITutors 根仓：`80780c7de`、`a930ef996`、`975f99ad5`（已推送 `origin/main`）
+- DeepTutor：`60e56673e`、`a23cc5648`（已推送 `fork/aitutor/deeptutor-integration`）
 
 ---
 
@@ -127,12 +130,14 @@ DeepTutor QCoreTeachPage 目前只有 Vitest 组件测试，没有启动完整 D
 - 四例根因；
 - OCR raw 保留与 24 张重跑；
 - 结构安全内核与四例回归；
+- 题组共享材料进入 Query（RP39/RP40）；
 - DeepTutor 多题目标选择入口；
-- 20 张额外 OCR block 级审计。
+- 20 例状态级人工审计。
 
-但**不能**按任务书标记 `DSH_COMPLETE`。剩余两项必须补齐：
+但**不能**按任务书标记 `DSH_COMPLETE`。剩余必须补齐：
 
-1. 题组/共享材料选择与 Query 构造（尤其 RP39/RP40）；
-2. 20 个人工结构金标 + 浏览器 E2E。
+1. 20 例的逐题完整边界/共享材料人工金标；
+2. 浏览器 E2E（单题、多题、综合题、不确定结构）；
+3. 表级快照报告（目前只有 production guard 计数全等）。
 
 在补齐前，不应进入 MIMO 独立复核，也不应宣称生产可用。
