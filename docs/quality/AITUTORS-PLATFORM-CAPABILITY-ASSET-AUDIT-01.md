@@ -106,7 +106,15 @@ D:\Project\NLP\six-subject-kg
 - mmlong 许可为 README 的 PolyForm Noncommercial + 无 LICENSE 文件，商用/对外发布前必须确认；
 - `aligned_to` 292 条是候选对齐，不是 verified 映射。
 
-结论：Mytutors/Mytutor taxonomy 应优先作为规范树候选；`six-subject-kg` 是外部对齐/候选资产，不是 QCore 或 Mytutors 的替代规范。
+结论（Owner 2026-11-26 裁决）：**`six-subject-kg` 的 4,829 节点就是规范底座**；Mytutors 926/629 是其中一个来源层，不是替代规范树。映射由**统一 LLM** 生成，不做人工映射审查；节点后续可继续丰富。
+
+这意味着：
+
+- 4,829 节点不是候选层，而是当前 NLP 知识层的正式底座；
+- 57 条旧映射只作为历史样例，必须针对当前 QCore 全量重跑；
+- LLM 输出必须统一 schema、统一 prompt、统一模型版本；
+- 人工不逐条审查，但自动校验、版本、证据、置信度、许可是独立门槛；
+- 许可问题不是“人工审查”，是使用场景合规 gate，不能混为一谈。
 
 ---
 
@@ -201,8 +209,8 @@ DeepTutor ChatComposer / /ws start_turn
 1. published 真相与统一入口的发布门禁；
 2. `.doc` 是否必须支持，还是转换后支持；
 3. mmlong 许可与商用边界；
-4. 规范知识树选择：以 Mytutors 926/629 为规范、NLP 4,829 作外部对齐层，还是反向；
-5. 是否允许将外部 KG 作为候选层，而不是正式事实；
+4. 已裁决：以 `six-subject-kg` 4,829 节点为规范底座，LLM 统一映射，不做人工逐条审查；
+5. 是否允许将外部 KG 作为正式底座（Owner 已裁决：允许；许可风险另行处理）；
 6. 统一入口是否先做 DeepTutor 内最小路由，不新开页面。
 
 ---
