@@ -2,6 +2,7 @@
 
 - 日期：2026-11-26
 - 状态：**NODE ALIGNMENT COMPLETE / V2 FULL MAPPING NOT APPROVED**
+- 后续覆盖实验：[AITUTORS-QCORE-KG-PRIMARY-ALIGNMENT-03.md](AITUTORS-QCORE-KG-PRIMARY-ALIGNMENT-03.md)
 - 性质：1,911 个未对齐 mmlong 节点的 Primary 分类
 - 模型：`deepseek-flash`，固定 temperature=0、seed=42
 - 候选域：PrimaryCategoryIndex（177 项）
