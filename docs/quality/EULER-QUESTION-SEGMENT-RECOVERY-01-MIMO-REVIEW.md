@@ -128,9 +128,32 @@ reviewed/*.json
 4. Assisted gold + 人工 verdict 是否满足本轮回归标准，还是必须独立人工逐条金标？
 5. 是否允许进入下一阶段，还是必须先补真实整图 E2E？
 
-## 8. 提交物
+## 8. MIMO 条件关闭项状态
 
-- 根仓：`0d44fa1d7`、`4014ed433`（已推送 `origin/main`）
-- DeepTutor：`3a3b84ec7`（已推送 `fork/aitutor/deeptutor-integration`）
-- 报告：`docs/quality/EULER-QUESTION-SEGMENT-RECOVERY-01-ASSISTED-GOLD.md`
-- 代码：上述结构/OCR/API/UI/E2E 文件
+| ID | 状态 | 证据 |
+|---|---|---|
+| C1 DT gitlink | **已清** | 根仓 gitlink `3a3b84ec773925824957b96118fea529a6e31735`；根仓提交 `88584f92f` |
+| C2 交付边界 | **已清** | `EULER-QUESTION-SEGMENT-RECOVERY-01-ANNOTATION.md` 已提交（同 `88584f92f`） |
+| C3 完整边界金标 | 未做 | 不挡四 FE 根因关闭；Owner 字面标准另定 |
+| C4 真实整图 E2E | 不要求 | OCR 质量由 Preprocessing 覆盖；E2E 固定 OCR 边界 |
+| C5 12 条 auto_cleaned 二次抽样 | 未做 | 不挡根因关闭；记录为 assisted 残留 |
+
+### 交付边界说明
+
+- `Preprocessing` 的 `M` 是既有工作区改动，本任务未修改、未提交；
+- `DeepTutor` 下 `data-gym-cache/`、`deeptutor-environment-*.lock`、`pytest-of-Kurtw/`、`vl-layout-*` 是运行时/测试缓存，不是交付物；
+- `DeepTutor/docs-for-dev/EULER-LIKE-TUTOR-IMPLEMENTATION-DIRECTION.md` 是既有未跟踪文档，不属于本任务；
+- 本任务的新增代码/测试/报告均已提交，未把缓存或既有工作区改动混入提交。
+
+## 9. 当前状态
+
+```text
+MIMO_CONDITIONAL_PASS
+C1 = CLEARED
+C2 = CLEARED
+C3/C4/C5 = 不阻断根因关闭（见上）
+OWNER_ACCEPTANCE = PENDING
+```
+
+不写成 `MIMO_PASS`；不声称真实四场景 E2E 已完成；不声称完整独立人工边界金标。
+
