@@ -4,17 +4,18 @@
 - 性质：只读盘点（未改代码、未写 QCore、未启动新服务）
 - 范围：P0 DeepTutor 原生能力 + P1 QCore 现有 NLP 资产
 - 相关外部资产：`D:\Project\NLP\six-subject-kg`、`D:\Project\Mytutors`
+- 工作包 A 事实核查：[AITUTORS-WORK-PACKAGE-A-01.md](AITUTORS-WORK-PACKAGE-A-01.md)
 
 ---
 
 ## 0. 结论先行
 
 1. **不重建聊天、附件、文件解析、LLM 调用。** DeepTutor 已有聊天/附件/vision/流式/会话持久化；缺的是 QCore 优先路由、LLM 兜底和异步入库，不是基础聊天设施。
-2. **QCore 当前是内容保真库，不是知识库。** 没有知识点、技能、难度、先修/题目关系字段；`subject/grade` 在 schema 中存在，但 207 条 candidate payload 中为 NULL。
+2. **QCore 当前是内容保真库，不是知识库。** 没有知识点、技能、难度、先修/题目关系字段；`subject/grade` 在 candidate.source 中存在且已填充（例外不是数据缺失），但 Revision/导出层没有直接携带，导出器仍用 `source_document_id` 推导学科。
 3. **外部 `six-subject-kg` 是候选资产，不是 QCore 已接入事实。** 4,829 节点/4,584 边、57 条题目映射；许可（mmlong PolyForm NC）和映射可信度都未解决。
-4. **必须先把 QCore 的确定性字段补起来，再做 LLM/NLP。** 先 backfill subject/grade、question type/capability、paper/curriculum 轴；知识点映射放在后面。
+4. **必须先把 QCore 的确定性字段和导出事实补起来，再做 LLM/NLP。** 先修正 candidate.source → catalog/export 的 subject/grade 传递，再建立 question type/capability、paper/curriculum 轴；知识点映射放在后面。
 5. **个人学习模型可复用 DeepTutor 的 learning/mastery/error 基础设施。** 它已有 `KnowledgePoint`、`QuizAttempt`、`ErrorRecord`、掌握度与判分逻辑；但它是 per-mastery-path，不是 QCore 全局知识模型。
-6. **发布状态存在必须先核查的矛盾：** 只读探针在不同 QCore DB 上看到 published 为 0；旧评估记录 `qcore_g4_final_01` 有 9 个已发布样本，Compiler `/health` 与 `index_prod` 仍显示 169。三者不能同时为真；产品化前必须确认“当前 published 真相”，不能让 stale snapshot 进入统一入口。
+6. **发布状态事实已核实：** 本地 13 个 `qcore_*` DB 中，所有 revision 的 `publication_state` 都是 `unpublished`；当前 published 清单为空。`qcore_g4_final_01` 的 9 published 是历史评估记录；Compiler `/health` 的 169 是 2026-11-24 stale snapshot；`index_prod` 是 175 qid，不是 published-only。三者都不能当当前发布事实。
 
 ---
 
@@ -72,17 +73,20 @@
 | knowledge point / skill / taxonomy | 无表/无字段 | 无法做全局知识模型 |
 | difficulty | 无 | 无法难度分层 |
 | prerequisite / question relations | 无持久关系表 | 无法做学习路径 |
-| subject/grade 实际值 | schema 有，207/207 NULL | 无法可靠按学科/年级消费 |
+| subject/grade | candidate.source **已填充**；Revision/导出层未直接携带 | 导出器用 `source_document_id` 推导，需改为使用 candidate.source 权威值 |
 | student attempt/wrong question | QCore 无 | 个人模型只能先靠 DeepTutor learning |
 | dual-source wrong question | 无 | 教师批改/自报/系统判错未统一 |
 | publication 真相 | DB 0 vs snapshot 169 矛盾 | 产品化前必须核查 |
 
 ### 2.3 关键数据问题
 
-- QCore candidate payload 中 **没有 source 对象**，subject/grade 落库为 NULL；`semantic/export.py` 的 subject 是从 `source_document_id` 关键词推导的。
-- 上游 Preprocessing manifest 实际有 `grade/subject`，是 **Adapter 丢弃**，不是“没有数据”。
-- published 状态不一致：`qcore_g4_final_01` 旧评估记录 9 published；当前只读探针在不同 DB 看到 0；Compiler `/health` 仍显示 169；`index_prod` 也是 169。三者必须核查，不能据此宣称任何一个是当前真相。
-- 169 bundles 是 2026-11-24 从 `qcore_six_subject_accept_01` 构建的；当前 DB 状态需要重新核对。
+- `qcore_candidates.payload.source.subject/grade` **存在且已填充**；子代理最初查 `payload->'core'->'source'`，路径错误，结论不成立。
+- Revision 本身不含 subject/grade；`semantic/export.py` 与 `qcore_source.py` 用 `source_document_id` 关键词推导学科，未使用 candidate.source。
+- 这不是“Adapter 丢失”，而是 **导出/索引层忽略了权威 source 字段**；修复点是 catalog/export 的读取，不是回填 207 条数据。
+- 上游 Preprocessing manifest 也带 grade/subject，可作为交叉校验。
+- 本地 13 个 `qcore_*` DB 的 `qcore_revisions.publication_state` 全部为 `unpublished`；当前 published 清单为空，空清单 SHA256 为 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`。
+- `qcore_g4_final_01` 旧评估记录 9 published；Compiler `/health` 169；`index_prod` 175 qid；三者都是历史/派生，不是当前发布事实。
+- 169 bundles 是 2026-11-24 从 `qcore_six_subject_accept_01` 构建的；当前该 DB 已无 published revision。
 
 ---
 
@@ -123,12 +127,12 @@ D:\Project\NLP\six-subject-kg
 ### 4.1 全局层（学科/题目能力）
 
 - 应由 QCore 的真实题目 + 确定性字段开始：
-  1. subject/grade backfill；
+  1. 修正 catalog/export 使用 candidate.source 的 subject/grade；
   2. question_type + content bits + composite depth + answer form；
   3. paper/curriculum metadata；
   4. duplicate/variant grouping；
   5. 再引入外部 KG 候选映射；
-  6. 最后 LLM 标签 + 人工 Gold Set。
+  6. 最后 LLM 标签 + 自动一致性/覆盖率 Gold Set（不做逐条人工审查）。
 - **不要**先导入 4,829 节点再反推题目；先有题目身份和确定性轴。
 
 ### 4.1.1 错题双来源的实际落点
@@ -159,7 +163,7 @@ D:\Project\NLP\six-subject-kg
 | 优先级 | 工作 | 说明 |
 |---|---|---|
 | P0-0 | **核查 published 真相** | DB 0 vs snapshot 169；修正 stale index/snapshot 或明确当前发布策略 |
-| P0-1 | subject/grade backfill | 从 manifest 确定性回填，Adapter 修复；1 天级，不是 NLP |
+| P0-1 | 修正 catalog/export 的 subject/grade 来源 | candidate.source 已有权威值；导出器不应再用 `source_document_id` 推导；不是 207 条回填 |
 | P0-2 | 文件入口补齐 | `.doc` 转换/拒绝策略；扫描 PDF/图片 OCR 选择；服务端格式校验 |
 | P1 | QCore 确定性能力轴 | type/content/composite/paper/duplicate；全部可从现有字段得到 |
 | P1.5 | 外部 KG 评估 | 许可、57 映射复核、292 对齐候选；不直接生产 |
