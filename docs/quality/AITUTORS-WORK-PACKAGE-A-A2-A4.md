@@ -97,18 +97,23 @@ _dsh/workpackage_a/a2_a3_verification.json
 
 ---
 
-## A5. 发布状态
+## A5. 生产部署与运行核验
 
-沿用 reconciliation 结论：
+已完成：
+
+- 旧 catalog 备份：`_dsh/workpackage_a/production_qcore_before_a2`
+- 隔离 catalog 替换生产 `Teaching Script Compiler/data/qcore`
+- 169 catalog / 169 bundles；
+- Compiler 重启后 `/health`：`status=ok`、`published=169`；
+- 生产 catalog grade：169 条全部 `高三`；
+- production guard 与冻结基线全等：
 
 ```text
-state_history latest
-published = 169
-withdrawn = 18
-unpublished = 6
+qcore_questions 175 / revisions 193 / state_history 585
+published 169 / unpublished 6
 ```
 
-本次没有改变任何发布状态，也没有恢复 withdrawn 或发布 unpublished。
+生产 QCore 数据未改写、未 publish。
 
 ---
 
@@ -122,10 +127,11 @@ Teaching Script Compiler full pytest: 64 passed
 
 ## 当前边界
 
-- A2/A3/A4 代码和隔离验证完成；
-- 生产 catalog 尚未替换；是否部署属于后续动作，不在本轮自动执行；
+- A1–A5 完成；
+- 生产 catalog 已替换并重启 Compiler；
+- QCore 生产数据、发布状态、历史、索引均未改变；
 - B 阶段 six-subject-kg 映射、DeepTutor 统一入口仍未启动；
-- 下一步可交 MIMO 复查 A2–A4，再决定是否替换生产 catalog。
+- 已完成生产 catalog 替换和 Compiler 重启；后续只需 MIMO 复查。
 
 ---
 
