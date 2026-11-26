@@ -8,80 +8,67 @@
 
 ## A0. 结论
 
-1. **当前本地所有 QCore DB 的 published 列表为空**；只读查询 `publication_state='published'` 返回 0 行。
-2. **Compiler 的 169 published 是 2026-11-24 的 stale snapshot**，不是当前 DB 状态。
-3. `index_prod` 有 175 个 qid，不是 published-only 索引；`index_final` 1166 个 qid。不能把 169/175 当当前发布事实。
-4. **subject/grade 没有丢失**：`qcore_candidates.payload.source.subject/grade` 已填充；真正的问题是 catalog/export 用 `source_document_id` 推导学科，忽略了 candidate.source 的权威值。
-5. 因此 P0-1 不是“207 条回填”，而是 **修正导出/索引读取路径**。
-6. 在工作包 A 完成前，不应把任何 QCore 检索结果当作正式发布结果，也不应启动全量知识映射。
+1. **当前有效发布清单 = 169 published revisions / 169 questions**；`qcore_revisions.publication_state` 列是创建时投影，不能当当前状态。
+2. **state_history 是唯一权威**：最新 snapshot 为 published 169、withdrawn 18、unpublished 6；187/193 条列值与历史差异已完全解释。
+3. 18 withdrawn 全部有更高 revision 的 published 替代；6 unpublished 与 Compiler `skipped_unpublished=6` 一致。
+4. **169 不是 stale snapshot**：Compiler catalog/bundle 的 169 与 state_history 的 169 逐身份一致。
+5. **subject/grade 没有丢失**：193/193 candidate.source 都有；真正的问题是 catalog/export 用 `source_document_id` 推导学科，忽略了权威值。
+6. 因此 P0-1 不是“207 条回填”，而是 **修正导出/索引读取路径**。
+7. 工作包 A 的 P0-0 已锁定；可以进入 P0-1 隔离修复，但仍不启动全量映射。
 
 ---
 
 ## A1. P0-0：published 真相
 
-### 只读查询
+### 权威来源
 
-连接：`127.0.0.1:55432`，只读事务；数据库清单 13 个 `qcore_*`。
+`Question Core/question_core/persistence/repository.py:537-542` 明确：
 
-结果：
+> `qcore_revisions.review_state / publication_state / completeness` 是创建时快照，不读回作为当前状态；`qcore_state_history` 是唯一当前生命周期权威。
 
-| 数据库 | questions | revisions | published rows |
-|---|---:|---:|---:|
-| qcore_six_subject_accept_01 | 175 | 193 | 0 |
-| qcore_g4_final_01 | 207 | 207 | 0 |
-| qcore_semantic_expansion_01 | 1166 | 1166 | 0 |
-| qcore_student_integration_01 | 38 | 40 | 0 |
-| qcore_english_repair_01 | 175 | 187 | 0 |
-| qcore_qiqi_repair_01 | 175 | 189 | 0 |
-| qcore_qiqi_rereocr_01 | 175 | 193 | 0 |
-| qcore_prebulk_accept_01 | 64 | 105 | 0 |
-| qcore_d9_drill_01 | 184 | 184 | 0 |
+### 最新 state_history
 
-所有 revision 的 `publication_state` 均为 `unpublished`，review 为 `pending_review` 或 `not_ready`。
+| 状态 | revisions |
+|---|---:|
+| published | 169 |
+| withdrawn | 18 |
+| unpublished | 6 |
+| 合计 | 193 |
 
-**当前发布清单：空**  
-**published list SHA256：**
+列级值全部是 `unpublished`（创建时），所以 187 条不一致 = 169 published + 18 withdrawn；6 条一致为 unpublished。
+
+18 条 withdrawn 均有更高 revision_number 的 published revision 替代；6 条 unpublished 从未发布。
+
+### 当前发布清单
 
 ```text
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+published = 169 questions / 169 revisions
+SHA256 = 9a852ddc1d9849fbd9acf6d6194975363669637c384c5947c7ce6c01960be02f
 ```
 
-（这是空字符串的 SHA256。）
+证据：`_dsh/workpackage_a/authoritative_published.json`。
 
-### 与 Compiler snapshot 的矛盾
+### 与 Compiler 对应
 
-`Teaching Script Compiler/data/qcore/meta.json`：
+| 项 | 数量 |
+|---|---:|
+| published qids | 169 |
+| catalog qids | 169 |
+| bundle qids | 169 |
+| published ∩ catalog | 169 |
+| published without bundle | 0 |
 
-```json
-{
-  "built_at": "2026-11-24T14:08:16Z",
-  "database": "qcore_six_subject_accept_01",
-  "published_bundles": 169,
-  "questions_scanned": 175
-}
-```
+169 不是 stale；它与 catalog/bundle 身份一致。
 
-`index_prod`：
+`index_prod` 175 qid 包含 6 unpublished，不是 published-only 索引；不能把 175 当发布清单。
 
-- docs = 175
-- qids = 175
-- qid SHA256 = `9dea79b3...`
+### 结论
 
-这说明：
-
-- 169 是 11-24 构建时的历史快照；
-- index_prod 是 175 条（不是 169 条 published-only）；
-- 当前 DB 已经没有任何 published revision；
-- **不能用 169 或 175 作为当前发布清单**。
-
-### 必须由 Owner/后续任务决定
-
-- 这是“发布状态被重置”还是“生产/隔离库选错”；
-- 是否重新走 publish/Admission；
-- Compiler 是否必须 fail-closed 到“0 published”，不能继续读 stale snapshot；
-- 169 个旧 bundle 是否隔离/重建。
-
-未做：没有重建索引、没有 publish、没有改 DB。
+- 当前有效发布 = **169**；
+- 18 withdrawn 是旧 revision，不恢复；
+- 6 unpublished 保持未发布；
+- 不需要重建/恢复发布清单；
+- 需要修正的是导出路径，不是发布状态。
 
 ---
 
@@ -166,18 +153,23 @@ subject = subject_of(source_document_id)
 ## A5. 当前唯一可信结论
 
 ```text
-当前 QCore 本地 published = 0
-169 = stale snapshot
-subject/grade = candidate.source 中存在
+生产数据源 = qcore_six_subject_accept_01
+当前权威 = state_history latest snapshot
+published = 169 revisions / 169 questions
+withdrawn = 18 old revisions（均有更新 published）
+unpublished = 6
+published hash = 9a852ddc...
+Compiler catalog/bundles = 169/169 匹配
+subject/grade = 193/193 candidate.source 有值
 导出器 = 忽略 candidate.source
 ```
 
-所以工作包 A 的下一步不是“回填”，而是：
+所以工作包 A 的下一步不是“恢复发布”，而是：
 
-1. 确定哪个 DB/流程是当前生产事实源；
-2. 修复导出器读取 candidate.source；
-3. 隔离重导验证；
-4. 再由 Owner 决定是否重新 publish。
+1. 修正 catalog/export 读取 candidate.source 的 subject/grade；
+2. 隔离重导验证；
+3. 不改发布状态，不重建生产索引；
+4. 验证完成后再考虑 B 阶段映射。
 
 ---
 

@@ -15,7 +15,7 @@
 3. **外部 `six-subject-kg` 是候选资产，不是 QCore 已接入事实。** 4,829 节点/4,584 边、57 条题目映射；许可（mmlong PolyForm NC）和映射可信度都未解决。
 4. **必须先把 QCore 的确定性字段和导出事实补起来，再做 LLM/NLP。** 先修正 candidate.source → catalog/export 的 subject/grade 传递，再建立 question type/capability、paper/curriculum 轴；知识点映射放在后面。
 5. **个人学习模型可复用 DeepTutor 的 learning/mastery/error 基础设施。** 它已有 `KnowledgePoint`、`QuizAttempt`、`ErrorRecord`、掌握度与判分逻辑；但它是 per-mastery-path，不是 QCore 全局知识模型。
-6. **发布状态事实已核实：** 本地 13 个 `qcore_*` DB 中，所有 revision 的 `publication_state` 都是 `unpublished`；当前 published 清单为空。`qcore_g4_final_01` 的 9 published 是历史评估记录；Compiler `/health` 的 169 是 2026-11-24 stale snapshot；`index_prod` 是 175 qid，不是 published-only。三者都不能当当前发布事实。
+6. **发布状态已锁定：** 当前配置数据源 `qcore_six_subject_accept_01` 的 `qcore_state_history` 最新 snapshot 为 **169 published / 18 withdrawn / 6 unpublished**；`qcore_revisions.publication_state` 全部 `unpublished` 只是创建时投影。169 published 与 Compiler catalog/bundles **169/169 身份一致**，不是 stale。
 
 ---
 
@@ -76,7 +76,7 @@
 | subject/grade | candidate.source **已填充**；Revision/导出层未直接携带 | 导出器用 `source_document_id` 推导，需改为使用 candidate.source 权威值 |
 | student attempt/wrong question | QCore 无 | 个人模型只能先靠 DeepTutor learning |
 | dual-source wrong question | 无 | 教师批改/自报/系统判错未统一 |
-| publication 真相 | DB 0 vs snapshot 169 矛盾 | 产品化前必须核查 |
+| publication 真相 | state_history 最新：169 published / 18 withdrawn / 6 unpublished；列级 0 是创建时投影 | 已锁定，不再是待核查矛盾 |
 
 ### 2.3 关键数据问题
 
@@ -84,9 +84,10 @@
 - Revision 本身不含 subject/grade；`semantic/export.py` 与 `qcore_source.py` 用 `source_document_id` 关键词推导学科，未使用 candidate.source。
 - 这不是“Adapter 丢失”，而是 **导出/索引层忽略了权威 source 字段**；修复点是 catalog/export 的读取，不是回填 207 条数据。
 - 上游 Preprocessing manifest 也带 grade/subject，可作为交叉校验。
-- 本地 13 个 `qcore_*` DB 的 `qcore_revisions.publication_state` 全部为 `unpublished`；当前 published 清单为空，空清单 SHA256 为 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`。
-- `qcore_g4_final_01` 旧评估记录 9 published；Compiler `/health` 169；`index_prod` 175 qid；三者都是历史/派生，不是当前发布事实。
-- 169 bundles 是 2026-11-24 从 `qcore_six_subject_accept_01` 构建的；当前该 DB 已无 published revision。
+- `qcore_revisions.publication_state` 是创建时投影，全部 `unpublished`；`qcore_state_history` 才是当前权威。
+- 最新 snapshot：published 169、withdrawn 18、unpublished 6；18 withdrawn 均有更新 revision 的 published 替代。
+- 169 published 清单 SHA256：`9a852ddc1d9849fbd9acf6d6194975363669637c384c5947c7ce6c01960be02f`。
+- Compiler catalog/bundle 169 与 state_history 169 逐身份一致；`index_prod` 175 包含 6 unpublished，不是 published-only 索引。
 
 ---
 
@@ -162,7 +163,7 @@ D:\Project\NLP\six-subject-kg
 
 | 优先级 | 工作 | 说明 |
 |---|---|---|
-| P0-0 | **核查 published 真相** | DB 0 vs snapshot 169；修正 stale index/snapshot 或明确当前发布策略 |
+| P0-0 | **发布状态已锁定** | state_history latest：169 published / 18 withdrawn / 6 unpublished；列级 0 是创建时投影，不是重置 |
 | P0-1 | 修正 catalog/export 的 subject/grade 来源 | candidate.source 已有权威值；导出器不应再用 `source_document_id` 推导；不是 207 条回填 |
 | P0-2 | 文件入口补齐 | `.doc` 转换/拒绝策略；扫描 PDF/图片 OCR 选择；服务端格式校验 |
 | P1 | QCore 确定性能力轴 | type/content/composite/paper/duplicate；全部可从现有字段得到 |
@@ -204,7 +205,7 @@ DeepTutor ChatComposer / /ws start_turn
 
 - 当前实际安装/启用哪个 parsing/OCR engine；
 - 当前 LLM 是否真的接受图片；
-- QCore DB 0 published 的原因；
+- QCore published 真相已锁定为 169；列级 0 是创建时投影，不需要解释为 reset；
 - `six-subject-kg` 57 映射与当前 QCore 的重叠（审计文档声称 0，未重跑）；
 - 外部 KG 许可是否允许目标使用场景。
 
