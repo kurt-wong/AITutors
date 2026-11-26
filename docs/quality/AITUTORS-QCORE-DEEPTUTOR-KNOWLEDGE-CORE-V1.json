@@ -1,0 +1,145 @@
+{
+  "contract_version": "qcore-dt-core/v1",
+  "status": "core_only_no_schema_implementation",
+  "full_target_architecture": "AITUTORS-QCORE-DEEPTUTOR-KNOWLEDGE-CONTRACT-01.md",
+  "scope": {
+    "included": [
+      "QCore knowledge node identity",
+      "QCore question and revision identity",
+      "QuestionNodeMapping with roles and mapping_version",
+      "DeepTutor local KnowledgePoint identity",
+      "DeepTutor learning evidence identity",
+      "ownership boundaries"
+    ],
+    "deferred": [
+      "ObjectiveNodeLink",
+      "EvidenceMappingBinding",
+      "CanonicalMasteryProjection",
+      "ErrorEvidenceProjection",
+      "cross-path mastery",
+      "cross-version mastery",
+      "full bidirectional API",
+      "cross-path SRS"
+    ]
+  },
+  "entities": {
+    "QCoreKnowledgeNode": {
+      "owner": "qcore",
+      "identity": "node_id",
+      "fields": {
+        "node_id": "string",
+        "name": "string",
+        "subject": "string",
+        "level": "integer",
+        "node_catalog_version": "string"
+      }
+    },
+    "QCoreQuestionRevision": {
+      "owner": "qcore",
+      "identity": ["question_id", "revision_id"],
+      "fields": {
+        "question_id": "uuid",
+        "revision_id": "uuid",
+        "published": "boolean"
+      }
+    },
+    "QuestionNodeMapping": {
+      "owner": "qcore_derived",
+      "identity": ["question_id", "revision_id", "mapping_version", "node_id", "role"],
+      "fields": {
+        "question_id": "uuid",
+        "revision_id": "uuid",
+        "mapping_version": "string",
+        "node_id": "string",
+        "role": "primary|secondary|supporting",
+        "parent_primary_node_id": "string|null",
+        "confidence": "number 0..1",
+        "evidence_quote": "string",
+        "source_run_id": "string"
+      }
+    },
+    "DTLearningObjective": {
+      "owner": "deeptutor",
+      "identity": ["path_id", "kp_id"],
+      "fields": {
+        "path_id": "string",
+        "kp_id": "string",
+        "name": "string",
+        "knowledge_type": "memory|concept|procedure|design",
+        "module_id": "string",
+        "prerequisite_ids": ["string"]
+      },
+      "note": "kp_id is local; no canonical node field is required in V1"
+    },
+    "DTLearningEvidence": {
+      "owner": "deeptutor",
+      "identity": "evidence_id",
+      "fields": {
+        "evidence_id": "string",
+        "question_id": "string",
+        "revision_id": "string",
+        "source_type": "qcore|notebook|...",
+        "attempt_id": "string",
+        "knowledge_point_id": "string (local, may be empty)",
+        "result": "correct|incorrect|partial|ungraded",
+        "quality": "number|null",
+        "timestamp": "timestamp"
+      }
+    }
+  },
+  "invariants": [
+    "knowledge node identity and learning objective identity are distinct",
+    "question_id and revision_id are distinct identities",
+    "one question revision may map to many nodes; one node may be referenced by many questions",
+    "role is a question-semantics role, not a knowledge hierarchy relation",
+    "mapping_version is immutable; a revised mapping creates a new version",
+    "learning evidence retains question_id, revision_id, source_type, and attempt_id when available",
+    "dedupe includes learner_id (or a globally unique submission event id)",
+    "request_id is an idempotent submission id, never a per-request new attempt",
+    "ungraded evidence does not contribute to correctness, errors, or mastery",
+    "qcore and deeptutor never write each other's authoritative facts"
+  ],
+  "dedupe_key": [
+    "learner_id_or_global_submission_id",
+    "source_type",
+    "question_id",
+    "revision_id",
+    "attempt_id"
+  ],
+  "ownership": {
+    "qcore": [
+      "knowledge nodes",
+      "questions",
+      "revisions",
+      "publication state",
+      "QuestionNodeMapping",
+      "mapping versions"
+    ],
+    "deeptutor": [
+      "MasteryPath",
+      "LearningModule",
+      "KnowledgePoint",
+      "QuizAttempt",
+      "LearningEvidence",
+      "ErrorRecord",
+      "mastery",
+      "SRS"
+    ]
+  },
+  "not_now": [
+    "schema/tables",
+    "canonical mastery projection",
+    "evidence mapping sidecar",
+    "objective-node link table",
+    "cross-path aggregation",
+    "API contracts",
+    "169 V2 mapping"
+  ],
+  "priority": [
+    "knowledge semantic baseline",
+    "independent Node/Question Gold",
+    "Primary/Secondary mapping quality",
+    "real DeepTutor consumption validation",
+    "minimal association layer only when demanded"
+  ]
+}

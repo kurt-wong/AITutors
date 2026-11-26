@@ -1,11 +1,12 @@
 # AITUTORS-QCORE-DEEPTUTOR-KNOWLEDGE-CONTRACT-01
 
 - 日期：2026-11-27
-- 状态：**CONTRACT DESIGN COMPLETE / IMPLEMENTATION NOT STARTED**
-- 性质：QCore 全局知识模型 ↔ DeepTutor 个体学习模型的语义契约
+- 状态：**TARGET ARCHITECTURE / NOT FOR IMPLEMENTATION**
+- 性质：QCore 全局知识模型 ↔ DeepTutor 个体学习模型的目标架构设计
 - 修改代码：0
 - 修改数据库：0
 - 启动映射/生产：0
+- **实际实施请以 [CORE-V1](AITUTORS-QCORE-DEEPTUTOR-KNOWLEDGE-CORE-V1.md) 为准；本文保留为长期目标架构，不直接进入 Schema 建设。**
 
 ---
 
