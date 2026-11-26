@@ -1,7 +1,8 @@
 # EULER-QUESTION-SEGMENT-RECOVERY-01 — C3/C4/C5 收尾结果
 
 - 日期：2026-11-26
-- 状态：`MIMO_CONDITIONAL_PASS` 条件项 C3/C4/C5 补强完成
+- 状态：`MIMO_CONDITIONAL_PASS (CONDITIONS CLEARED / TASK CLOSED UNDER CONDITIONAL)`
+- Owner 裁决：C3/C4/C5 条件清项完成；其中独立人工边界金标、四场景全矩阵、剩余 7 条复核转入长期质量提升
 - 性质：assisted boundary gold + real OCR E2E + sample recheck
 
 ## C3 — Block-level 边界记录

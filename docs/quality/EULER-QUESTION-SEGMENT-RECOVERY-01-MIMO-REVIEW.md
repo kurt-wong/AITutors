@@ -148,15 +148,19 @@ reviewed/*.json
 ## 9. 当前状态
 
 ```text
-MIMO_CONDITIONAL_PASS
+MIMO_CONDITIONAL_PASS (CONDITIONS CLEARED / TASK CLOSED UNDER CONDITIONAL)
 C1 = CLEARED
 C2 = CLEARED
-C3 = CLEARED (assisted block boundary; independent human gold not claimed)
-C4 = CLEARED (real photo E2E, 1 passed)
-C5 = CLEARED (5/5 sampled)
-STATUS = MIMO_RE_REVIEW_READY
+C3 = CLEARED (assisted block boundary; independent human gold moved to long-term)
+C4 = CLEARED (real multi-question E2E passed; four-scene matrix moved to long-term)
+C5 = CLEARED (5/5 sampled; remaining 7 moved to long-term)
+STATUS = TASK CLOSED UNDER CONDITIONAL
 ```
 
-不写成 `MIMO_PASS`；C3 仍明确是 assisted，不冒充独立人工逐条金标；C4 只覆盖多题目标选择真实链路，不声称四场景全矩阵。
+不写成 `MIMO_PASS`；三项质量验证已转长期清单，不再作为本任务关闭前置条件。
+
+长期清单：
+
+[LONG-TERM-QUALITY-IMPROVEMENT.md](LONG-TERM-QUALITY-IMPROVEMENT.md)
 
 

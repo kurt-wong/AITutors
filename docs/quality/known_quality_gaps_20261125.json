@@ -473,6 +473,36 @@
           "report": "docs/quality/EULER-QUESTION-SEGMENT-RECOVERY-01.md"
         }
       }
+    },
+    "long_term_quality_improvement": {
+      "source_task": "EULER-QUESTION-SEGMENT-RECOVERY-01",
+      "status": "deferred",
+      "owner_decision": "2026-11-26: 从当前任务验收范围剥离，转入长期质量提升；不作为 MIMO_PASS 前置",
+      "items": [
+        {
+          "id": "LT-E2E-FOUR",
+          "item": "真实照片搜题四场景 E2E",
+          "current": "多题真实整图 1 passed；单题 mock",
+          "target": "补单题、综合题、结构不确定真实链路"
+        },
+        {
+          "id": "LT-BOUNDARY-HUMAN",
+          "item": "24 条边界独立人工金标",
+          "current": "assisted block boundary 24/24；22/24 题号匹配",
+          "target": "独立人工边界金标"
+        },
+        {
+          "id": "LT-AUTOCLEAN-FULL",
+          "item": "12 条 auto_cleaned 全量复核",
+          "current": "固定种子抽 5/5 通过",
+          "target": "剩余 7 条逐条复核"
+        }
+      ],
+      "frozen_limits": [
+        "RP05/RP18/RP04/RP13 OCR/PDF source limits",
+        "11 G8/G9 blocked samples",
+        "8 ocr_source_defect samples"
+      ]
     }
   },
   "lock_policies": [

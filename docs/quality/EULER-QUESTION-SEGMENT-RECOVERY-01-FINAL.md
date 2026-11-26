@@ -2,8 +2,9 @@
 
 - 日期：2026-11-26
 - 执行：DSH
-- 状态：`MIMO_CONDITIONAL_PASS / C1–C5 CLOSED / MIMO_RE_REVIEW_READY`
+- 状态：`MIMO_CONDITIONAL_PASS (CONDITIONS CLEARED / TASK CLOSED UNDER CONDITIONAL)`
 - MIMO 独立结论：`_dsh/semantic_expansion_01/PBA_SEGMENT_RECOVERY_MIMO_VERIFICATION.md`
+- Owner 裁决：C1–C5 条件清项完成；三项质量验证转入长期质量提升，不再作为本任务 `MIMO_PASS` 前置
 
 ---
 
@@ -218,12 +219,13 @@ DeepTutor 160000 e7d525a88eccf57498c6f376fe0b00a4ba81860a
 - 不声称 3 条 OCR 源限制已修复；
 - 不声称 12 条 auto_cleaned 全部二次人工复核（只做 5 条抽样）。
 
-## 9. 请 MIMO 复查
+## 9. 关闭裁决
 
-重点检查：
+- 当前任务：**关闭**；
+- 三验证：真实四场景 E2E、24 条独立人工边界金标、12 条全量复核 → **转入长期质量提升**；
+- 已知限制：RP05/RP18/RP04/RP13、11 份 G8/G9、8 份 `ocr_source_defect` → **继续冻结**；
+- 不再追加测试、不重开代码、不追形式上的 `MIMO_PASS`。
 
-1. C1/C2/C3/C4/C5 是否满足关闭条件；
-2. assisted boundary gold 是否可作为条件关闭材料；
-3. 真实 E2E 单场景是否足够，还是必须四场景全矩阵；
-4. RP05/RP18 题号偏移是否应保持 `known_ocr_limit`；
-5. 是否允许以 `MIMO_CONDITIONAL_PASS` 正式关闭。
+长期清单：
+
+[LONG-TERM-QUALITY-IMPROVEMENT.md](LONG-TERM-QUALITY-IMPROVEMENT.md)
