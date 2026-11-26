@@ -89,9 +89,33 @@ review_summary.json
 reviewed/*.json
 ```
 
-## 6. 已知限制（请 MIMO 判定是否阻断）
+## 6. 测试边界（更正）
 
-1. **真实整图 E2E 未闭环**：远端 PaddleOCR 返回 `任务提交队列已满`；浏览器 E2E 使用固定 OCR job 边界，真实 API 只做了 structure smoke。
+**不重复测试 OCR 识别质量。** Preprocessing 管线已经多次调用 OCR API，并产出封存 OCR/Manifest；本任务不重跑 OCR 质量评测。
+
+本任务的浏览器 E2E 测的是 **DeepTutor 拍照链路**，不是 OCR 模型：
+
+```text
+浏览器上传
+  → /api/qcore-teach/search 同源代理
+  → Compiler job（202）
+  → /api/qcore-teach/jobs/{id} 轮询
+  → search result 的 structure
+  → 多题目标选择
+  → /api/qcore-teach/search-text
+  → 候选
+```
+
+因此：
+
+- E2E 固定 OCR job 结果，只验证代理/轮询/结构/目标选择/Query；
+- 不把 OCR 队列可用性作为本任务验收门槛；
+- 真实 API smoke 已确认 Photo search 返回 `structure=ambiguous, units 5-8`；
+- 3 条 OCR 源限制属于源保真，不在本任务 Query/结构逻辑内修复。
+
+## 7. 已知限制（请 MIMO 判定是否阻断）
+
+1. **OCR 质量不重复测试**：Preprocessing 已覆盖；本任务 E2E 固定 OCR 边界，不等待远端 OCR 队列。
 2. **3 条 OCR 源限制**：RP04/RP05/RP13 需要 OCR/PDF 层面处理，不应在 Query 里伪造。
 3. **12 条 auto-cleaned 没有第二次人工逐条复核**：来自人工 note 的确定性裁剪。
 4. **assisted gold 不是独立人工从零标注**：人工只做 verdict，未逐条重建 segments。

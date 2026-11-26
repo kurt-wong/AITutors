@@ -80,9 +80,18 @@ npx playwright test tests/e2e/qcore-teach-target.audit.ts --project=ui-audit --w
 
 测试固定 OCR job 结果，跨过远端 OCR 队列；真实 OCR/Compiler 的结构返回另行做了 API smoke（structure=ambiguous, units 5-8）。真实整图 E2E 曾因远端 OCR 返回 `任务提交队列已满` 未能完成，属于外部服务限制，不是页面失败。
 
-## 7. 仍缺
+## 7. 测试边界
 
-- 真实整图 E2E 受 OCR 队列限制未完整跑通；当前浏览器 E2E 是固定 OCR 边界；
+**不重复测试 OCR 识别质量。** Preprocessing 已完成 OCR 调用与封存；本任务的 E2E 只验证：
+
+```text
+上传 → 同源代理 → job 轮询 → structure → 目标选择 → search-text → 候选
+```
+
+E2E 固定 OCR job 结果，不等待远端 OCR 队列；远端队列满不是本任务验收失败。真实 API smoke 已确认 Photo search 返回 `structure=ambiguous, units 5-8`。
+
+## 8. 仍缺
+
 - 3 条 OCR 源限制未修复，需要 PDF/OCR 层面处理，不应在 Query 里伪造；
 - 12 条自动裁剪来自人工 note，不是第二次人工逐条复核。
 
