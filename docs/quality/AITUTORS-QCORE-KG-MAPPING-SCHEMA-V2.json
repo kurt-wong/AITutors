@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aitutors.local/schemas/qcore-kg-mapping-v2.json",
+  "title": "AITUTORS QCore KG Mapping Schema V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "question_id",
+    "revision_id",
+    "mapping_version",
+    "mapping_scope",
+    "primary",
+    "secondary",
+    "supporting",
+    "unmapped",
+    "source"
+  ],
+  "properties": {
+    "question_id": { "type": "string", "format": "uuid" },
+    "revision_id": { "type": "string", "format": "uuid" },
+    "mapping_version": { "type": "string", "const": "mapping-v2" },
+    "mapping_scope": { "type": "string", "enum": ["question", "subquestion"] },
+    "subquestion_ref": {
+      "type": ["string", "null"],
+      "description": "Required only when mapping_scope=subquestion; must be a QCore/source subquestion identity."
+    },
+    "primary": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "description": "Stable upper knowledge category. Must be from the derived PrimaryCategoryIndex (curriculum level 1/2/3), never a fine mmlong leaf.",
+      "items": { "$ref": "#/$defs/primaryItem" }
+    },
+    "secondary": {
+      "type": "array",
+      "maxItems": 12,
+      "description": "Specific knowledge points under a primary category; may be level 4 or mmlong fine nodes.",
+      "items": { "$ref": "#/$defs/secondaryItem" }
+    },
+    "supporting": {
+      "type": "array",
+      "maxItems": 8,
+      "description": "Prerequisite, auxiliary knowledge, or method; not a finer synonym of primary.",
+      "items": { "$ref": "#/$defs/supportingItem" }
+    },
+    "unmapped": {
+      "type": "array",
+      "description": "Explicit unmapped scopes; never remove a question by force.",
+      "items": { "$ref": "#/$defs/unmappedItem" }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "prompt_version", "candidate_top_k", "run_id"],
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "model_version": { "type": ["string", "null"] },
+        "prompt_version": { "type": "string" },
+        "prompt_sha256": { "type": "string" },
+        "candidate_top_k": { "type": "integer", "minimum": 1 },
+        "candidate_set_hash": { "type": "string" },
+        "run_id": { "type": "string" },
+        "run_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "mapping_scope": { "const": "subquestion" } } },
+      "then": {
+        "required": ["subquestion_ref"],
+        "properties": { "subquestion_ref": { "type": "string", "minLength": 1 } }
+      }
+    },
+    {
+      "if": { "properties": { "mapping_scope": { "const": "question" } } },
+      "then": {
+        "properties": { "subquestion_ref": { "type": "null" } }
+      }
+    }
+  ],
+  "$defs": {
+    "primaryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "node_name", "category_level", "confidence", "evidence_quote", "rationale"],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "pattern": "^my:",
+          "description": "Primary must be a curriculum category node, not an mmlong leaf."
+        },
+        "node_name": { "type": "string" },
+        "category_level": { "type": "integer", "enum": [1, 2, 3] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_quote": { "type": "string", "minLength": 1 },
+        "rationale": { "type": "string" }
+      }
+    },
+    "secondaryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "parent_primary_node_id", "confidence", "evidence_quote", "rationale"],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "pattern": "^(my|mml|goralcao):"
+        },
+        "parent_primary_node_id": { "type": "string", "pattern": "^my:" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_quote": { "type": "string", "minLength": 1 },
+        "rationale": { "type": "string" },
+        "pending_refinement": { "type": "boolean", "default": false }
+      }
+    },
+    "supportingItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "role", "confidence", "evidence_quote", "rationale"],
+      "properties": {
+        "node_id": { "type": "string", "pattern": "^(my|mml|goralcao):" },
+        "role": {
+          "type": "string",
+          "enum": ["prerequisite", "auxiliary_knowledge", "method", "related"]
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_quote": { "type": "string", "minLength": 1 },
+        "rationale": { "type": "string" }
+      }
+    },
+    "unmappedItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "reason"],
+      "properties": {
+        "scope": { "type": "string", "enum": ["question", "subquestion"] },
+        "subquestion_ref": { "type": ["string", "null"] },
+        "reason": {
+          "type": "string",
+          "enum": ["no_suitable_primary_category", "no_suitable_secondary_node", "graph_gap", "insufficient_source_text"]
+        },
+        "detail": { "type": "string" }
+      }
+    }
+  }
+}
