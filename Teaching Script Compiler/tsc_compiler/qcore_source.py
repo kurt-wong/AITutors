@@ -37,6 +37,41 @@ def subject_of(source_document_id: str) -> str:
     return "unknown"
 
 
+def load_revision_source_metadata(session) -> dict[str, dict[str, str]]:
+    """Map revision/question ids -> authoritative candidate.source metadata.
+
+    The candidate payload holds the source branch (subject/grade) while the
+    revision payload does not.  ``content`` is the stable identity shared by
+    the admitted candidate and its revision; use it instead of guessing from
+    the source filename.  Some newer revisions have no instance row of their
+    own, so the question id is also indexed for fallback.
+    """
+    from sqlalchemy import text
+
+    rows = session.execute(
+        text(
+            """
+            select r.revision_id::text as revision_id,
+                   r.question_id::text as question_id,
+                   c.payload->'source'->>'subject' as subject,
+                   c.payload->'source'->>'grade' as grade
+            from qcore_revisions r
+            join qcore_candidates c
+              on c.payload->'core'->'content' = r.payload->'content'
+            """
+        )
+    ).mappings()
+    out: dict[str, dict[str, str]] = {}
+    for row in rows:
+        meta = {
+            "subject": str(row["subject"] or ""),
+            "grade": str(row["grade"] or ""),
+        }
+        out[str(row["revision_id"])] = meta
+        out.setdefault(str(row["question_id"]), meta)
+    return out
+
+
 def _import_qcore(qcore_root: Path) -> None:
     root = str(qcore_root)
     if root not in sys.path:
@@ -147,6 +182,7 @@ def build_catalog_entry(bundle: dict[str, Any], allowlist: dict[str, dict[str, A
         "revision_number": bundle.get("revision_number"),
         "question_type": bundle.get("question_type"),
         "subject": bundle.get("subject"),
+        "grade": bundle.get("grade"),
         "source_document_id": bundle.get("source_document_id"),
         "printed_number": bundle.get("printed_number"),
         "section": bundle.get("section"),
@@ -213,6 +249,7 @@ def build_snapshot(settings: Settings, *, only_published: bool = True) -> dict[s
         read_only = session.execute(text("show transaction_read_only")).scalar()
         stats["read_only"] = str(read_only)
         repo = QuestionCoreRepository(session)
+        source_metadata = load_revision_source_metadata(session)
         qids = [
             row[0]
             for row in session.execute(
@@ -235,13 +272,17 @@ def build_snapshot(settings: Settings, *, only_published: bool = True) -> dict[s
                 if str(snap.revision_id) == str(rev.revision_id):
                     latest = snap
             payload = rev.model_dump(mode="json")
+            source_meta = source_metadata.get(str(rev.revision_id), {}) or source_metadata.get(
+                str(rev.question_id), {}
+            )
             bundle = {
                 "question_id": str(agg.identity.question_id),
                 "revision_id": str(rev.revision_id),
                 "revision_number": rev.revision_number,
                 "question_type": payload.get("question_type"),
                 "content_hash": payload.get("content_hash"),
-                "subject": subject_of(source_document_id),
+                "subject": source_meta.get("subject") or subject_of(source_document_id),
+                "grade": source_meta.get("grade") or None,
                 "source_document_id": source_document_id,
                 "printed_number": inst.printed_number if inst else None,
                 "section": inst.section if inst else None,

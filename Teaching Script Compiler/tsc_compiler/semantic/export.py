@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from ..config import load_settings
-from ..qcore_source import build_catalog_entry, subject_of
+from ..qcore_source import build_catalog_entry, load_revision_source_metadata, subject_of
 
 SUBJECT_KEYWORDS = ("语文", "数学", "英语", "物理", "化学", "生物", "历史", "地理", "政治")
 
@@ -65,6 +65,7 @@ def export_catalog(
         if str(read_only).lower() not in {"on", "true", "1"}:
             raise RuntimeError(f"refusing to export without read-only transaction: {read_only}")
         repo = QuestionCoreRepository(session)
+        source_metadata = load_revision_source_metadata(session)
         qids = [
             row[0]
             for row in session.execute(text("select question_id from qcore_questions order by question_id"))
@@ -77,6 +78,9 @@ def export_catalog(
             rev = agg.published_revision() or max(revs, key=lambda r: r.revision_number)
             inst = agg.instances[0] if agg.instances else None
             source_document_id = inst.source_document_id if inst else ""
+            source_meta = source_metadata.get(str(rev.revision_id), {}) or source_metadata.get(
+                str(agg.identity.question_id), {}
+            )
             payload = rev.model_dump(mode="json")
             latest = None
             for snap in agg.state_history:
@@ -88,7 +92,8 @@ def export_catalog(
                 "revision_number": rev.revision_number,
                 "question_type": payload.get("question_type"),
                 "content_hash": payload.get("content_hash"),
-                "subject": _subject(source_document_id),
+                "subject": source_meta.get("subject") or _subject(source_document_id),
+                "grade": source_meta.get("grade") or None,
                 "source_document_id": source_document_id,
                 "printed_number": inst.printed_number if inst else None,
                 "section": inst.section if inst else None,
