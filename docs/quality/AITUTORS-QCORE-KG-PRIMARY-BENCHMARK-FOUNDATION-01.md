@@ -5,7 +5,7 @@
 - 性质：Primary 分类基准 + 节点对齐 + 固定测试集
 - QCore 写入：0
 - 4,829 节点修改：0
-- 外部数据合并：0
+- 外部数据合并：0（本项目非商业，许可证不再阻断后续使用；本轮仍未导入）
 - DeepTutor 入口：0
 
 ---
@@ -14,7 +14,7 @@
 
 ```text
 PrimaryCategoryIndex = BUILT
-外部数据 = 仅审计，不合并
+外部数据 = 非商业可用，但本轮未导入
 4,182 节点对齐 = BASELINE BUILT (2,271 mapped / 1,911 unmapped)
 固定 Primary 基准 = PROVISIONAL, 20 题
 169 题 V2 全量 = NOT APPROVED
@@ -63,9 +63,9 @@ _dsh/workpackage_d/primary_category_index_v1.json
 
 结论：
 
-- K12-KGraph 数据集 CC BY-NC-SA 4.0，代码 MIT；仅可隔离研究，不可商用合并；
-- China Skill Taxonomy 许可证未核实，待审计；
-- CnK12Taxonomy ODbL/CC BY-SA，不能随意并入；
+- K12-KGraph 数据集 CC BY-NC-SA 4.0；本项目非商业，可用，但保留 attribution/ShareAlike；本轮未导入；
+- China Skill Taxonomy 许可证条款未完整核实，待审计；
+- CnK12Taxonomy ODbL/CC BY-SA，义务保留；
 - 33,765 数据集暂缓；
 - **本轮未导入任何外部数据**。
 
@@ -174,15 +174,16 @@ rep3 与 full 的类别匹配 = 17/20
 
 没有达到 90% 的 V2 门槛。
 
-### 3.4 外部数据不能解决许可证问题
+### 3.4 许可证不再是阻断项
 
-K12-KGraph 的数据集是 CC BY-NC-SA 4.0：
+AITutors 已明确完全不商用，因此：
 
-- 可以研究其层级/分类方法；
-- 不能把数据并入商业产品；
-- 不能把“代码 MIT”误当“数据可商用”。
+- K12-KGraph 数据集 CC BY-NC-SA 4.0 的 NonCommercial 条款不再阻断使用；
+- 仍需 attribution、许可证链接、修改说明，并按 ShareAlike 开放衍生数据集；
+- CnK12Taxonomy 的 ODbL/CC BY-SA 义务仍存在；
+- 本轮没有导入外部数据，因此没有许可证污染或归属遗漏。
 
-因此本轮没有用外部数据充覆盖率。
+许可证已不是 V2 的阻断项；覆盖和稳定性仍是。
 
 ---
 
