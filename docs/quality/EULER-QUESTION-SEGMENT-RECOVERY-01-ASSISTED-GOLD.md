@@ -55,10 +55,36 @@ runs/qcore_semantic_expansion_01/v11/structure_recovery/review_summary.json
 runs/qcore_semantic_expansion_01/v11/structure_recovery/reviewed/*.json
 ```
 
-## 6. 仍缺
+## 6. 浏览器 E2E
 
-- 浏览器 E2E（单题/多题/综合题/不确定结构）未跑；
+新增：
+
+```text
+DeepTutor/web/tests/e2e/qcore-teach-target.audit.ts
+```
+
+运行：
+
+```powershell
+cd DeepTutor/web
+$env:WEB_BASE_URL='http://127.0.0.1:3100'
+npx playwright test tests/e2e/qcore-teach-target.audit.ts --project=ui-audit --workers=1
+```
+
+结果：**2 passed**
+
+| 场景 | 断言 |
+|---|---|
+| 多题照片 | 上传后出现 `teach-target-selection`；选择 Q6/Q7/Q8 后出现候选；目标选择阶段消失 |
+| 单题照片 | 上传后直接出现候选，不出现 `teach-target-selection` |
+
+测试固定 OCR job 结果，跨过远端 OCR 队列；真实 OCR/Compiler 的结构返回另行做了 API smoke（structure=ambiguous, units 5-8）。真实整图 E2E 曾因远端 OCR 返回 `任务提交队列已满` 未能完成，属于外部服务限制，不是页面失败。
+
+## 7. 仍缺
+
+- 真实整图 E2E 受 OCR 队列限制未完整跑通；当前浏览器 E2E 是固定 OCR 边界；
 - 3 条 OCR 源限制未修复，需要 PDF/OCR 层面处理，不应在 Query 里伪造；
 - 12 条自动裁剪来自人工 note，不是第二次人工逐条复核。
 
-因此本文件只关闭“assisted gold 复核”这一步；整体任务仍不能标 `DSH_COMPLETE`，也不能进入 MIMO 独立复核。
+因此整体任务仍不能标 `DSH_COMPLETE`，也不能进入 MIMO 独立复核。
+
